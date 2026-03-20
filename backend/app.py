@@ -1,218 +1,193 @@
 from flask import Flask, request, jsonify
-import requests
 from flask_cors import CORS
+import requests
 import joblib
 import pandas as pd
 import os
 import math
-from datetime import datetime
+from datetime import datetime, timedelta
 
 app = Flask(__name__)
-# Enable CORS so your Flutter app can make requests to this API safely
+# Enable CORS so the Flutter app can talk to Flask securely
 CORS(app)
 
 print("🧠 Waking up the EnergyTwin AI...")
 
-# 1. Load the XGBoost Model
-# Update this path if you saved your model in a different folder!
-MODEL_PATH = "../models//xgboost_price_predictor_v1.joblib" 
+# ==========================================
+# 1. LOAD THE XGBOOST MODEL
+# ==========================================
+MODEL_PATH = "../models/xgboost_price_predictor_v1.joblib" 
 
 try:
-    # We use absolute pathing to avoid directory confusion
     base_dir = os.path.dirname(os.path.abspath(__file__))
     full_model_path = os.path.join(base_dir, MODEL_PATH)
-    
     model = joblib.load(full_model_path)
     print("✅ XGBoost Model loaded successfully!")
 except FileNotFoundError:
     print(f"⚠️ Warning: Model not found at {full_model_path}.")
-    print("The server will start, but predictions will return mock data until the path is fixed.")
     model = None
 
-# 2. Health Check Endpoint
+# ==========================================
+# 2. HEALTH CHECK ENDPOINT
+# ==========================================
 @app.route('/', methods=['GET'])
 def health_check():
-    return jsonify({
-        "status": "online",
-        "message": "EnergyTwin DE Flask Backend is running!"
-    }), 200
+    return jsonify({"status": "online", "message": "EnergyTwin DE Flask Backend is running!"}), 200
 
-# 3. The AI Prediction Endpoint
-@app.route('/predict_price', methods=['POST'])
-def predict_price():
-    try:
-        # Get raw data from the mobile app (or our curl test)
-        data = request.get_json()
-        
-        # If the model didn't load, return an error
-        if model is None:
-            return jsonify({"error": "Model not loaded on server."}), 500
-
-        # 1. Extract base values (with sensible fallbacks just in case)
-        load = data.get('Electricity_Load', 60000)
-        solar = data.get('Generation_Solar', 15000)
-        wind_on = data.get('Generation_Wind_Onshore', 20000)
-        wind_off = data.get('Generation_Wind_Offshore', 5000)
-        
-        hour = data.get('hour', 12)
-        day_of_week = data.get('day_of_week', 2)
-        month = data.get('month', 6)
-        is_weekend = data.get('is_weekend', 0)
-
-        # 2. Re-create your awesome Engineered Features!
-        total_renewable = solar + wind_on + wind_off
-        renewable_ratio = total_renewable / load if load > 0 else 0
-
-        # 3. Build the exact DataFrame XGBoost expects
-        input_dict = {
-            'Electricity_Load': [load],
-            'Generation_Solar': [solar],
-            'Generation_Wind_Onshore': [wind_on],
-            'Generation_Wind_Offshore': [wind_off],
-            'Total_Renewable': [total_renewable],
-            'Renewable_Ratio': [renewable_ratio],
-            'hour': [hour],
-            'day_of_week': [day_of_week],
-            'month': [month],
-            'is_weekend': [is_weekend]
-        }
-        df_input = pd.DataFrame(input_dict)
-        
-        # Ensure the column order matches the training data perfectly
-        expected_cols = [
-            'Electricity_Load', 'Generation_Solar', 'Generation_Wind_Onshore', 
-            'Generation_Wind_Offshore', 'Total_Renewable', 'Renewable_Ratio', 
-            'hour', 'day_of_week', 'month', 'is_weekend'
-        ]
-        df_input = df_input[expected_cols]
-
-        # 4. Make the real prediction!
-        prediction = model.predict(df_input)[0]
-
-        return jsonify({
-            "predicted_price_mwh": float(prediction),
-            "status": "success"
-        }), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 400
-# 4. The Investment Advisor Endpoint (Phase 2 Digital Twin)
+# ==========================================
+# 3. COMPREHENSIVE INVESTMENT ADVISOR
+# ==========================================
 @app.route('/simulate_investment', methods=['POST'])
 def simulate_investment():
-    """
-    Expects a JSON payload from the Flutter app like:
-    {
-        "monthly_gas_bill_eur": 150,
-        "house_size_sqm": 120
-    }
-    """
     try:
         data = request.get_json()
         
-        # 1. The User's Current Reality
-        monthly_gas = data.get('monthly_gas_bill_eur', 150)
+        # User Inputs
+        monthly_gas = float(data.get('monthly_gas_bill_eur', 150))
+        house_size = float(data.get('house_size_sqm', 120))
+        insulation = data.get('insulation_level', 'average') 
+        
         yearly_gas_cost = monthly_gas * 12
+        gas_price_kwh = 0.10
+        yearly_gas_kwh = yearly_gas_cost / gas_price_kwh
         
-        # 2. The Digital Twin Baseline (From our simulate_house.py!)
-        # Our physics engine proved a standard house needs 5,938 kWh of electricity for heating.
-        heatpump_kwh_needed = 5938 
+        # Actual thermal heat needed (assuming old gas boiler is 85% efficient)
+        actual_heat_demand_kwh = yearly_gas_kwh * 0.85 
         
-        # 3. The "Dumb" Heat Pump Scenario
-        # If they don't use your AI, they pay the standard German flat rate (~30 cents/kWh)
-        standard_elec_price = 0.30 
-        dumb_hp_cost = heatpump_kwh_needed * standard_elec_price
+        # Determine COP based on insulation quality
+        if insulation == 'good':
+            cop = 4.2
+        elif insulation == 'average':
+            cop = 3.5
+        else: 
+            cop = 2.8
+            
+        hp_electricity_kwh = actual_heat_demand_kwh / cop
         
-        # 4. The "EnergyTwin AI" Scenario
-        # Because your XGBoost model shifts the heating to cheap hours (e.g., sunny/windy days),
-        # the average price drops significantly (e.g., ~18 cents/kWh).
-        smart_elec_price = 0.18
-        smart_hp_cost = heatpump_kwh_needed * smart_elec_price
+        # Financial Math
+        standard_elec_price = 0.30 # 30 ct/kWh
+        smart_elec_price = 0.18    # 18 ct/kWh (AI optimized)
         
-        # 5. The ROI Math
-        # How much money does your app save them compared to their old gas heater?
+        dumb_hp_cost = hp_electricity_kwh * standard_elec_price
+        smart_hp_cost = hp_electricity_kwh * smart_elec_price
         annual_savings = yearly_gas_cost - smart_hp_cost
         
-        # Assume an average Heat Pump installation costs €15,000 (after German BAFA subsidies)
-        installation_cost = 15000 
+        # Environmental Math (CO2 footprint)
+        gas_co2_kg = yearly_gas_kwh * 0.20
+        hp_co2_kg = hp_electricity_kwh * 0.35 
+        co2_saved_kg = max(0, gas_co2_kg - hp_co2_kg)
         
-        # Calculate years to break even
+        # ROI Math (Assuming €15,000 net cost)
+        installation_cost = 15000 
         roi_years = installation_cost / annual_savings if annual_savings > 0 else 99
         
         return jsonify({
             "current_yearly_gas_cost_eur": round(yearly_gas_cost, 2),
-            "dumb_heatpump_cost_eur": round(dumb_hp_cost, 2),
             "smart_heatpump_cost_eur": round(smart_hp_cost, 2),
             "ai_annual_savings_eur": round(annual_savings, 2),
             "estimated_roi_years": round(roi_years, 1),
+            "heat_demand_kwh": round(actual_heat_demand_kwh),
+            "hp_electricity_kwh": round(hp_electricity_kwh),
+            "cop_estimated": cop,
+            "co2_saved_kg": round(co2_saved_kg),
             "status": "success"
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
-@app.route('/predict_tomorrow', methods=['GET'])
-def predict_tomorrow():
+
+# ==========================================
+# 4. LIVE MARKET PREDICTOR (WITH CALIBRATION)
+# ==========================================
+@app.route('/predict_prices', methods=['GET'])
+def predict_prices():
     try:
         if model is None:
             return jsonify({"error": "Model not loaded on server."}), 500
 
-        # 1. Fetch live weather forecast for Frankfurt/Germany from Open-Meteo
-        url = "https://api.open-meteo.com/v1/forecast"
-        params = {
+        target_day = request.args.get('target', 'today')
+
+        # A. Determine Dates
+        if target_day == 'tomorrow':
+            start_idx, end_idx = 24, 48
+            target_date = datetime.now() + timedelta(days=1)
+        else:
+            start_idx, end_idx = 0, 24
+            target_date = datetime.now()
+
+        month = target_date.month
+        day_of_week = target_date.weekday()
+        is_weekend = 1 if day_of_week >= 5 else 0
+
+        # B. Fetch Weather (Open-Meteo)
+        weather_url = "https://api.open-meteo.com/v1/forecast"
+        weather_params = {
             "latitude": 50.1109,
-            "longitude": 8.6821, # Central Germany / Frankfurt
+            "longitude": 8.6821,
             "hourly": ["wind_speed_100m", "shortwave_radiation"],
             "timezone": "Europe/Berlin",
-            "forecast_days": 2 # Get today and tomorrow
+            "forecast_days": 2
         }
-        
-        weather_res = requests.get(url, params=params)
+        weather_res = requests.get(weather_url, params=weather_params)
         weather_res.raise_for_status()
         weather_data = weather_res.json()
 
-        # 2. Extract exactly tomorrow's 24 hours (hours 24 to 47 in the array)
-        times = weather_data['hourly']['time'][24:48]
-        wind_speeds = weather_data['hourly']['wind_speed_100m'][24:48]
-        solar_rads = weather_data['hourly']['shortwave_radiation'][24:48]
+        wind_speeds = weather_data['hourly']['wind_speed_100m'][start_idx:end_idx]
+        solar_rads = weather_data['hourly']['shortwave_radiation'][start_idx:end_idx]
+
+        # C. Fetch 7-Day Persistence Grid Load (Fraunhofer ISE)
+        historical_dt = target_date - timedelta(days=7)
+        historical_str = historical_dt.strftime('%Y-%m-%d')
         
-        # Get date context for XGBoost
-        tomorrow_date = datetime.strptime(times[0][:10], "%Y-%m-%d")
-        month = tomorrow_date.month
-        day_of_week = tomorrow_date.weekday()
-        is_weekend = 1 if day_of_week >= 5 else 0
+        try:
+            load_url = f"https://api.energy-charts.info/public_power?bzn=DE-LU&start={historical_str}&end={historical_str}"
+            load_res = requests.get(load_url)
+            load_res.raise_for_status()
+            
+            raw_15min_load = next((item['data'] for item in load_res.json() if item['name'] in ['Load', 'Stromverbrauch', 'Gesamt (Netzlast)']), None)
+            
+            if raw_15min_load and len(raw_15min_load) >= 96:
+                hourly_real_load = []
+                for i in range(0, 96, 4):
+                    chunk = [val for val in raw_15min_load[i:i+4] if val is not None]
+                    hourly_real_load.append(sum(chunk) / len(chunk) if chunk else 50000)
+            else:
+                raise ValueError("Valid load data not found.")
+        except Exception as e:
+            print(f"⚠️ Load fallback triggered: {e}")
+            hourly_real_load = [50000 + (10000 * math.sin(math.pi * (h - 6) / 12)) if 6 <= h <= 18 else 45000 for h in range(24)]
 
-        predictions = []
+        # D. Fetch Yesterday's Market Average for Baseline Calibration
+        try:
+            yesterday_dt = target_date - timedelta(days=1)
+            yesterday_str = yesterday_dt.strftime('%Y-%m-%d')
+            price_url = f"https://api.energy-charts.info/price?bzn=DE-LU&start={yesterday_str}&end={yesterday_str}"
+            price_res = requests.get(price_url)
+            price_res.raise_for_status()
+            yesterday_prices = price_res.json().get('price', [])
+            yesterday_avg = sum(yesterday_prices) / len(yesterday_prices) if yesterday_prices else 100.0
+        except Exception as e:
+            print(f"⚠️ Calibration fallback triggered: {e}")
+            yesterday_avg = 100.0 
 
-        # 3. Translate Weather to Grid MWh and Feed to AI
+        # E. Generate AI Predictions
+        raw_predictions = []
         for hour in range(24):
-            # Scale weather to German Grid MWh (Smart Heuristics based on real capacities)
-            # Max German solar radiation ~ 800 W/m2. Max Grid Solar ~ 40,000 MWh. Multiplier ~ 50.
             solar = max(0, solar_rads[hour] * 50) 
-            
-            # Wind power scales roughly with speed. (20km/h ~ 25,000 MWh as a proxy)
             wind_on = min(40000, max(0, (wind_speeds[hour] / 20.0) * 25000))
-            wind_off = wind_on * 0.25 # Offshore is usually steadier, rough 25% proxy
-            
-            # Load profile (Base grid usage: higher in day, lower at night)
-            load = 50000 + (10000 * math.sin(math.pi * (hour - 6) / 12)) if 6 <= hour <= 18 else 45000
+            wind_off = wind_on * 0.25 
+            load = hourly_real_load[hour]
             
             total_renewable = solar + wind_on + wind_off
             renewable_ratio = total_renewable / load if load > 0 else 0
 
-            # Build the exact dataframe row XGBoost expects
             df_hour = pd.DataFrame([{
-                'Electricity_Load': load,
-                'Generation_Solar': solar,
-                'Generation_Wind_Onshore': wind_on,
-                'Generation_Wind_Offshore': wind_off,
-                'Total_Renewable': total_renewable,
-                'Renewable_Ratio': renewable_ratio,
-                'hour': hour,
-                'day_of_week': day_of_week,
-                'month': month,
-                'is_weekend': is_weekend
+                'Electricity_Load': load, 'Generation_Solar': solar, 'Generation_Wind_Onshore': wind_on,
+                'Generation_Wind_Offshore': wind_off, 'Total_Renewable': total_renewable,
+                'Renewable_Ratio': renewable_ratio, 'hour': hour, 'day_of_week': day_of_week,
+                'month': month, 'is_weekend': is_weekend
             }])
 
-            # Enforce strict column order
             expected_cols = [
                 'Electricity_Load', 'Generation_Solar', 'Generation_Wind_Onshore', 
                 'Generation_Wind_Offshore', 'Total_Renewable', 'Renewable_Ratio', 
@@ -220,18 +195,96 @@ def predict_tomorrow():
             ]
             df_hour = df_hour[expected_cols]
 
-            # Let XGBoost make the real prediction!
             price = float(model.predict(df_hour)[0])
-            predictions.append(price)
+            raw_predictions.append(price)
+
+        # F. Apply Calibration Offset
+        raw_avg = sum(raw_predictions) / len(raw_predictions)
+        calibration_offset = yesterday_avg - raw_avg
+        calibrated_predictions = [round(p + calibration_offset, 2) for p in raw_predictions]
 
         return jsonify({
-            "date": tomorrow_date.strftime("%Y-%m-%d"),
-            "hourly_prices": predictions,
+            "date": target_date.strftime("%Y-%m-%d"),
+            "hourly_prices": calibrated_predictions,
             "status": "success"
         }), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+# ==========================================
+# 5. AUTOMATED ACCURACY TRACKER
+# ==========================================
+@app.route('/benchmark', methods=['GET'])
+def benchmark():
+    try:
+        # Default to checking 'today' since yesterday's API values are securely published
+        target_day = request.args.get('target', 'today')
+        
+        if target_day == 'tomorrow':
+            target_dt = datetime.now() + timedelta(days=1)
+        else:
+            target_dt = datetime.now()
+            
+        target_str = target_dt.strftime('%Y-%m-%d')
+        
+        # 1. Fetch REAL Prices
+        fraunhofer_url = f"https://api.energy-charts.info/price?bzn=DE-LU&start={target_str}&end={target_str}"
+        real_res = requests.get(fraunhofer_url)
+        
+        if real_res.status_code != 200:
+             return jsonify({"error": f"Failed to fetch real EPEX prices for {target_str}."}), 404
+             
+        real_data = real_res.json()
+        real_prices = real_data.get('price', [])
+        
+        if len(real_prices) < 24:
+            return jsonify({"error": "Incomplete data from EPEX SPOT."}), 400
+            
+        real_prices = real_prices[:24] 
+        
+        max_price = max(real_prices)
+        min_price = min(real_prices)
+        avg_price = sum(real_prices) / len(real_prices)
+        real_cheapest_hour = real_prices.index(min_price)
+        
+        # 2. Fetch AI Prices (Self-ping)
+        ai_res = requests.get(f'http://127.0.0.1:5001/predict_prices?target={target_day}')
+        ai_data = ai_res.json()
+        ai_prices = ai_data.get('hourly_prices', [])
+        
+        if not ai_prices:
+            return jsonify({"error": "AI prediction failed during benchmark."}), 500
+            
+        # 3. Calculate Performance Metrics
+        errors = [abs(real - ai) for real, ai in zip(real_prices, ai_prices)]
+        mae = sum(errors) / len(errors)
+        
+        ai_cheapest_hour = ai_prices.index(min(ai_prices))
+        if real_cheapest_hour == ai_cheapest_hour:
+            peak_accuracy = "100% Perfect Match! Heat Pump will turn on at the exact right time."
+        else:
+            peak_accuracy = f"Missed by {abs(real_cheapest_hour - ai_cheapest_hour)} hour(s)."
+
+        return jsonify({
+            "target_date": target_str,
+            "real_market_stats": {
+                "max_price_eur_mwh": round(max_price, 2),
+                "min_price_eur_mwh": round(min_price, 2),
+                "average_price_eur_mwh": round(avg_price, 2),
+                "actual_cheapest_hour": f"{str(real_cheapest_hour).zfill(2)}:00",
+                "raw_prices": real_prices
+            },
+            "ai_performance": {
+                "mean_absolute_error_eur": round(mae, 2),
+                "cheapest_hour_prediction": peak_accuracy,
+                "ai_predicted_prices": ai_prices
+            },
+            "status": "success"
+        }), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 400
+
 if __name__ == '__main__':
-    # Run the server on port 5000
     app.run(debug=True, host='0.0.0.0', port=5001)
