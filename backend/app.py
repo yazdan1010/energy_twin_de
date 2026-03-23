@@ -7,6 +7,12 @@ import os
 import math
 from datetime import datetime, timedelta
 
+# --- TEAMMATE'S SOLAR MODULES ---
+from ml_engine import SasanSolarAI
+from solar_engine import calculate_architect_analysis
+from optimizer import generate_architect_report
+import config
+
 app = Flask(__name__)
 # Enable CORS so the Flutter app can talk to Flask securely
 CORS(app)
@@ -119,7 +125,7 @@ def predict_prices():
         day_of_week = target_date.weekday()
         is_weekend = 1 if day_of_week >= 5 else 0
 
-        # B. Fetch Weather (Open-Meteo)
+        # B. Fetch Weather Forecast (Open-Meteo - 100% Reliable)
         weather_url = "https://api.open-meteo.com/v1/forecast"
         weather_params = {
             "latitude": 50.1109,
@@ -144,7 +150,11 @@ def predict_prices():
             load_res = requests.get(load_url)
             load_res.raise_for_status()
             
-            raw_15min_load = next((item['data'] for item in load_res.json() if item['name'] in ['Load', 'Stromverbrauch', 'Gesamt (Netzlast)']), None)
+            # FIXED THE JSON PARSING BUG HERE!
+            load_json = load_res.json()
+            production_types = load_json.get('production_types', []) if isinstance(load_json, dict) else load_json
+            
+            raw_15min_load = next((item['data'] for item in production_types if item.get('name') in ['Load', 'Stromverbrauch', 'Gesamt (Netzlast)']), None)
             
             if raw_15min_load and len(raw_15min_load) >= 96:
                 hourly_real_load = []
@@ -154,7 +164,7 @@ def predict_prices():
             else:
                 raise ValueError("Valid load data not found.")
         except Exception as e:
-            print(f"⚠️ Load fallback triggered: {e}")
+            print(f"⚠️ Load fallback triggered safely: {e}")
             hourly_real_load = [50000 + (10000 * math.sin(math.pi * (h - 6) / 12)) if 6 <= h <= 18 else 45000 for h in range(24)]
 
         # D. Fetch Yesterday's Market Average for Baseline Calibration
@@ -167,14 +177,23 @@ def predict_prices():
             yesterday_prices = price_res.json().get('price', [])
             yesterday_avg = sum(yesterday_prices) / len(yesterday_prices) if yesterday_prices else 100.0
         except Exception as e:
-            print(f"⚠️ Calibration fallback triggered: {e}")
             yesterday_avg = 100.0 
 
-        # E. Generate AI Predictions
+        # E. Generate AI Predictions (NON-LINEAR PHYSICS)
         raw_predictions = []
         for hour in range(24):
-            solar = max(0, solar_rads[hour] * 50) 
-            wind_on = min(40000, max(0, (wind_speeds[hour] / 20.0) * 25000))
+            # 1. Solar Physics: Max grid capacity ~80,000 MW. Radiation max ~800 W/m2.
+            # This multiplier ensures zero at night and massive spikes at noon.
+            solar = min(80000, max(0, solar_rads[hour] * 100))
+            
+            # 2. Wind Physics: Power scales with the CUBE of wind speed (Velocity^3).
+            # German cut-in speed is ~10km/h. Max capacity ~65,000 MW.
+            speed = wind_speeds[hour]
+            if speed < 10:
+                wind_on = 0
+            else:
+                wind_on = min(65000, 65000 * ((speed - 10) / 20.0)**3)
+            
             wind_off = wind_on * 0.25 
             load = hourly_real_load[hour]
             
@@ -188,12 +207,10 @@ def predict_prices():
                 'month': month, 'is_weekend': is_weekend
             }])
 
-            expected_cols = [
-                'Electricity_Load', 'Generation_Solar', 'Generation_Wind_Onshore', 
-                'Generation_Wind_Offshore', 'Total_Renewable', 'Renewable_Ratio', 
-                'hour', 'day_of_week', 'month', 'is_weekend'
-            ]
-            df_hour = df_hour[expected_cols]
+            # Enforce column order
+            df_hour = df_hour[['Electricity_Load', 'Generation_Solar', 'Generation_Wind_Onshore', 
+                               'Generation_Wind_Offshore', 'Total_Renewable', 'Renewable_Ratio', 
+                               'hour', 'day_of_week', 'month', 'is_weekend']]
 
             price = float(model.predict(df_hour)[0])
             raw_predictions.append(price)
@@ -285,6 +302,74 @@ def benchmark():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 400
+
+# ==========================================
+# 6. SOLAR STRATEGY ENGINE (API INTEGRATION)
+# ==========================================
+@app.route('/simulate_solar', methods=['POST'])
+def simulate_solar():
+    try:
+        data = request.get_json()
+
+        # 1. Inputs from Flutter
+        num_panels = int(data.get('num_panels', 20))
+        monthly_bill = float(data.get('monthly_bill_eur', 200.0))
+        energy_rating = data.get('energy_rating', 'D').upper()
+        household_size = int(data.get('household_size', 4))
+
+        # 2. Initialize Teammate's ML Engine (WITH OS PATH FIX)
+        base_dir = os.path.dirname(os.path.abspath(__file__))
+        csv_file_path = os.path.join(base_dir, "solar_data.csv")
+        
+        ai_advisor = SasanSolarAI(csv_path=csv_file_path) 
+        X, y = ai_advisor.prepare_features(energy_rating, household_size)
+
+        # 3. Train & Predict
+        raw_accuracy, raw_r2 = ai_advisor.validate_model_performance(X, y)
+        raw_yield = ai_advisor.final_prediction(X)
+
+        # CAST TO NATIVE PYTHON FLOATS HERE to prevent JSON serialization errors
+        ml_predicted_yield = float(raw_yield)
+        accuracy = float(raw_accuracy)
+        r2 = float(raw_r2)
+
+        # 4. Financial & Architectural Analysis
+        analysis = calculate_architect_analysis(ml_predicted_yield, num_panels, monthly_bill, energy_rating)
+
+        # 5. Generate Strategic Text Advice
+        strategic_advice = generate_architect_report(analysis, accuracy, energy_rating)
+
+        # 6. Construct the JSON Response for Flutter (Safely casting all nested dictionary values)
+        return jsonify({
+            "status": "success",
+            "ai_metrics": {
+                "accuracy_percent": accuracy,
+                "r2_score": r2
+            },
+            "system_specs": {
+                "yield_kwh": float(analysis['yield']),
+                "num_panels": int(analysis['num_panels']),
+                "capacity_kwp": float(analysis['capacity_kwp']),
+                "co2_saved_tons": float(analysis['co2_saved'])
+            },
+            "financials": {
+                "no_battery": {
+                    "payback": float(analysis['no_battery']['payback']),
+                    "invest": float(analysis['no_battery']['invest']),
+                    "savings": float(analysis['no_battery']['savings']),
+                    "sc_rate": float(analysis['no_battery']['sc_rate'])
+                },
+                "with_battery": {
+                    "payback": float(analysis['with_battery']['payback']),
+                    "invest": float(analysis['with_battery']['invest']),
+                    "savings": float(analysis['with_battery']['savings']),
+                    "sc_rate": float(analysis['with_battery']['sc_rate'])
+                }
+            },
+            "strategic_advice": [str(advice) for advice in strategic_advice]
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)

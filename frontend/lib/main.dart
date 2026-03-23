@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/advisor_screen.dart';
 import 'package:frontend/price_dashboard_screen.dart';
+import 'package:frontend/solar_dashboard_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
-
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
 void main() {
@@ -51,7 +51,7 @@ class EnergyTwinApp extends StatelessWidget {
             ).apply(bodyColor: Colors.white, displayColor: Colors.white),
             scaffoldBackgroundColor: const Color(0xFF0F172A),
           ),
-          home: const AppShell(),
+          home: AppShell(),
         );
       },
     );
@@ -69,11 +69,12 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  int _currentIndex = 1; // Start on the Advisor screen for now
+  int _currentIndex = 0; // Start on the Advisor screen for now
 
   final List<Widget> _screens = [
     PriceDashboardScreen(themeNotifier: themeNotifier), // Screen 0
-    AdvisorScreen(themeNotifier: themeNotifier), // Screen 1
+    AdvisorScreen(themeNotifier: themeNotifier),
+    SolarDashboardScreen(themeNotifier: themeNotifier), // Screen 1
   ];
 
   @override
@@ -98,9 +99,9 @@ class _AppShellState extends State<AppShell> {
             selectedIcon: Icon(Icons.calculate),
             label: 'Advisor',
           ),
+          NavigationDestination(icon: Icon(Icons.solar_power), label: 'Solar AI'),
         ],
       ),
     );
   }
 }
-
