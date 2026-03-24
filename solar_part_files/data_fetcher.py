@@ -2,7 +2,7 @@ import requests
 import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
-import config
+import  config
 import os
 
 def get_coordinates_from_address(address, mapbox_token):
@@ -19,7 +19,7 @@ def get_coordinates_from_address(address, mapbox_token):
     }
     
     try:
-        response = requests.get(url, params=params, timeout=10)
+        response = requests.get(url, params=params, timeout=60)
         response.raise_for_status()
         data = response.json()
         if 'features' in data and data['features']:
@@ -45,7 +45,7 @@ def fetch_historical_weather(lat, lon, years=5):
         "longitude": lon,
         "start_date": start_date,
         "end_date": end_date,
-        "hourly": "temperature_2m,shortwave_radiation,direct_radiation,diffuse_radiation,cloud_cover",
+        "hourly": "temperature_2m,shortwave_radiation,direct_radiation,diffuse_radiation,cloud_cover,snowfall",
         "timezone": "Europe/Berlin"
     }
     
@@ -111,9 +111,16 @@ def fetch_satellite_image(lat, lon, mapbox_token):
     Spatial Layer: Mapbox Static Satellite API.
     Captures high-res roof imagery for the AI Roof Analyser.
     """
-    # Optimized for Zoom Level 19 (Highest detail for roof detection)
     url = f"https://api.mapbox.com/styles/v1/mapbox/satellite-v9/static/{lon},{lat},19,0/800x800?access_token={mapbox_token}"
-    filename = "assets/roof_top.png" # Fixed path for dashboard assets
+    
+    # PRODUCTION FIX: Absolute pathing + Auto folder creation
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    assets_dir = os.path.join(base_dir, "assets")
+    
+    # This safely creates the folder if it doesn't exist, preventing the Errno 2 crash!
+    os.makedirs(assets_dir, exist_ok=True) 
+    
+    filename = os.path.join(assets_dir, "roof_top.png")
     
     try:
         # Pre-cleanup: Ensure fresh imagery for each session

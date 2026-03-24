@@ -1,17 +1,29 @@
+import os
+import sys
+base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.append(base_dir)
+# 2. Point Python directly inside your teammate's folder so 'import config' works magically
+sys.path.append(os.path.join(base_dir, "solar_part_files"))
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import requests
 import joblib
 import pandas as pd
-import os
+
 import math
 from datetime import datetime, timedelta
+import base64
+import cv2
+import numpy as np
+from solar_part_files.data_fetcher import get_coordinates_from_address, fetch_satellite_image, fetch_historical_weather
+from solar_part_files.roof_analyser import place_panels_on_roof, calculate_dynamic_scale
 
 # --- TEAMMATE'S SOLAR MODULES ---
-from ml_engine import SasanSolarAI
-from solar_engine import calculate_architect_analysis
-from optimizer import generate_architect_report
-import config
+from solar_part_files.ml_engine import SasanSolarAI
+from solar_part_files.solar_engine import calculate_architect_analysis
+from solar_part_files.optimizer import generate_architect_report
+from solar_part_files import config
 
 app = Flask(__name__)
 # Enable CORS so the Flutter app can talk to Flask securely
@@ -304,72 +316,93 @@ def benchmark():
         return jsonify({"error": str(e)}), 400
 
 # ==========================================
-# 6. SOLAR STRATEGY ENGINE (API INTEGRATION)
+# 6A. STEP 1: FETCH SATELLITE IMAGE
+# ==========================================
+@app.route('/get_roof', methods=['POST'])
+def get_roof():
+    try:
+        data = request.get_json()
+        address = data.get('address', 'Bonn, Germany')
+        
+        # 1. Geocode
+        lat, lon = get_coordinates_from_address(address, config.MAPBOX_TOKEN)
+        if lat is None:
+            return jsonify({"error": "Address not found."}), 404
+            
+        # 2. Fetch Image
+        img_path = fetch_satellite_image(lat, lon, config.MAPBOX_TOKEN)
+        if not img_path:
+            return jsonify({"error": "Failed to fetch satellite imagery."}), 500
+            
+        # 3. Convert image to Base64 to send to Flutter
+        with open(img_path, "rb") as image_file:
+            encoded_string = base64.b64encode(image_file.read()).decode('utf-8')
+            
+        return jsonify({
+            "status": "success",
+            "lat": lat,
+            "lon": lon,
+            "image_base64": encoded_string
+        }), 200
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ==========================================
+# 6B. STEP 2: SIMULATE SOLAR DASHBOARD
 # ==========================================
 @app.route('/simulate_solar', methods=['POST'])
 def simulate_solar():
     try:
         data = request.get_json()
-
-        # 1. Inputs from Flutter
-        num_panels = int(data.get('num_panels', 20))
+        
+        # Inputs from Flutter
+        lat = data.get('lat')
+        lon = data.get('lon')
         monthly_bill = float(data.get('monthly_bill_eur', 200.0))
         energy_rating = data.get('energy_rating', 'D').upper()
         household_size = int(data.get('household_size', 4))
-
-        # 2. Initialize Teammate's ML Engine (WITH OS PATH FIX)
-        base_dir = os.path.dirname(os.path.abspath(__file__))
-        csv_file_path = os.path.join(base_dir, "solar_data.csv")
         
-        ai_advisor = SasanSolarAI(csv_path=csv_file_path) 
+        # The coordinates tapped by the user on the Flutter app!
+        # Flutter displays at 400x400, original Mapbox is 800x800, so we multiply by 2
+        raw_points = data.get('roof_points', [])
+        roof_contour = np.array([[int(p['x'] * 2), int(p['y'] * 2)] for p in raw_points], dtype=np.int32)
+
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        img_path = os.path.join(base_dir, "solar_part_files", "assets", "roof_top.png")
+        
+        num_panels, final_img = place_panels_on_roof(img_path, roof_contour)
+        
+        if num_panels == 0:
+            return jsonify({"error": "Roof too small or invalid selection. Please try again."}), 400
+
+        # Encode the AI-drawn panel image to send back to Flutter
+        _, buffer = cv2.imencode('.png', final_img)
+        analyzed_image_base64 = base64.b64encode(buffer).decode('utf-8')
+
+        # 2. Climate & ML Engine
+        historical_df = fetch_historical_weather(lat, lon, years=config.HISTORY_YEARS)
+        ai_advisor = SasanSolarAI(config.HISTORICAL_DATA_FILE) 
         X, y = ai_advisor.prepare_features(energy_rating, household_size)
 
-        # 3. Train & Predict
-        raw_accuracy, raw_r2 = ai_advisor.validate_model_performance(X, y)
-        raw_yield = ai_advisor.final_prediction(X)
+        accuracy, r2 = ai_advisor.validate_model_performance(X, y)
+        ml_predicted_yield = ai_advisor.final_prediction(X)
 
-        # CAST TO NATIVE PYTHON FLOATS HERE to prevent JSON serialization errors
-        ml_predicted_yield = float(raw_yield)
-        accuracy = float(raw_accuracy)
-        r2 = float(raw_r2)
+        # 3. Financial Engine (Using Teammate's New Function)
+        analysis = calculate_architect_analysis(
+            ml_annual_yield=ml_predicted_yield, 
+            num_panels=num_panels, 
+            monthly_bill=monthly_bill, 
+            energy_rating=energy_rating, 
+            historical_df=historical_df,
+            ai_accuracy_val=accuracy
+        )
+        
+        # Attach the image so Flutter can display it!
+        analysis["analyzed_image_base64"] = analyzed_image_base64
 
-        # 4. Financial & Architectural Analysis
-        analysis = calculate_architect_analysis(ml_predicted_yield, num_panels, monthly_bill, energy_rating)
+        return jsonify(analysis), 200
 
-        # 5. Generate Strategic Text Advice
-        strategic_advice = generate_architect_report(analysis, accuracy, energy_rating)
-
-        # 6. Construct the JSON Response for Flutter (Safely casting all nested dictionary values)
-        return jsonify({
-            "status": "success",
-            "ai_metrics": {
-                "accuracy_percent": accuracy,
-                "r2_score": r2
-            },
-            "system_specs": {
-                "yield_kwh": float(analysis['yield']),
-                "num_panels": int(analysis['num_panels']),
-                "capacity_kwp": float(analysis['capacity_kwp']),
-                "co2_saved_tons": float(analysis['co2_saved'])
-            },
-            "financials": {
-                "no_battery": {
-                    "payback": float(analysis['no_battery']['payback']),
-                    "invest": float(analysis['no_battery']['invest']),
-                    "savings": float(analysis['no_battery']['savings']),
-                    "sc_rate": float(analysis['no_battery']['sc_rate'])
-                },
-                "with_battery": {
-                    "payback": float(analysis['with_battery']['payback']),
-                    "invest": float(analysis['with_battery']['invest']),
-                    "savings": float(analysis['with_battery']['savings']),
-                    "sc_rate": float(analysis['with_battery']['sc_rate'])
-                }
-            },
-            "strategic_advice": [str(advice) for advice in strategic_advice]
-        }), 200
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
