@@ -35,10 +35,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
   Map<String, dynamic>? _analysisData;
 
   String get _baseUrl {
-    const port = '5001';
-    if (kIsWeb) return 'http://127.0.0.1:$port';
-    if (Platform.isAndroid) return 'http://10.0.2.2:$port';
-    return 'http://127.0.0.1:$port';
+    return 'https://energy-twin-de.onrender.com'; 
   }
 
   // --- API 1: Fetch Image ---

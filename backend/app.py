@@ -278,7 +278,7 @@ def benchmark():
         real_cheapest_hour = real_prices.index(min_price)
         
         # 2. Fetch AI Prices (Self-ping)
-        ai_res = requests.get(f'http://127.0.0.1:5001/predict_prices?target={target_day}')
+        ai_res = requests.get(f'{request.host_url}predict_prices?target={target_day}')
         ai_data = ai_res.json()
         ai_prices = ai_data.get('hourly_prices', [])
         

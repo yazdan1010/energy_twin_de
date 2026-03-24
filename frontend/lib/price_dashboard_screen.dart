@@ -24,12 +24,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
   String _selectedDay = 'today';
 
   String get _apiUrl {
-    const port = '5001';
-    // NEW: We pass the target day as a URL query parameter!
-    final endpoint = '/predict_prices?target=$_selectedDay';
-    if (kIsWeb) return 'http://127.0.0.1:$port$endpoint';
-    if (Platform.isAndroid) return 'http://10.0.2.2:$port$endpoint';
-    return 'http://127.0.0.1:$port$endpoint';
+    return 'https://energy-twin-de.onrender.com';
   }
 
   @override
