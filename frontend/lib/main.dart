@@ -4,7 +4,7 @@ import 'package:frontend/price_dashboard_screen.dart';
 import 'package:frontend/solar_dashboard_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.system);
+final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 void main() {
   runApp(const EnergyTwinApp());
 }
@@ -23,7 +23,6 @@ class EnergyTwinApp extends StatelessWidget {
 
           // Now it listens to our manual toggle!
           themeMode: currentMode,
-
           theme: ThemeData(
             useMaterial3: true,
             brightness: Brightness.light,
