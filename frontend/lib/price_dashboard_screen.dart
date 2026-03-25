@@ -1,7 +1,6 @@
 import 'dart:convert';
-import 'dart:io';
+
 import 'package:fl_chart/fl_chart.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/custom_app_bar.dart';
 import 'package:http/http.dart' as http;
@@ -16,12 +15,17 @@ class PriceDashboardScreen extends StatefulWidget {
 
 class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
   List<double> _hourlyPrices = [];
-  bool _isLoading = true;
+  bool _isLoading = _cachedTodayPrices == null;
   String _errorMessage = '';
   String _targetDate = '';
 
-  // NEW: Keep track of which day the user wants to see
+  //Keep track of which day the user wants to see
   String _selectedDay = 'today';
+  //  Cache memory boxes so we only fetch once!
+  static List<double>? _cachedTodayPrices;
+  static String? _cachedTodayDate;
+  static List<double>? _cachedTomorrowPrices;
+  static String? _cachedTomorrowDate;
 
   String get _apiUrl {
     return 'https://energy-twin-de.onrender.com';
@@ -34,25 +38,67 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
   }
 
   Future<void> _fetchLiveForecast() async {
-    setState(() => _isLoading = true);
+    // 1. THE CACHE CHECK (The "Bouncer")
+    // If the data is already in our global memory, load it instantly and skip the API call!
+    if (_selectedDay == 'today' && _cachedTodayPrices != null) {
+      setState(() {
+        _hourlyPrices = _cachedTodayPrices!;
+        _targetDate = _cachedTodayDate!;
+        _isLoading = false; // Turn off the spinner immediately
+        _errorMessage = ''; // Clear any old errors
+      });
+      return; // 🛑 EXIT EARLY!
+    }
+
+    if (_selectedDay == 'tomorrow' && _cachedTomorrowPrices != null) {
+      setState(() {
+        _hourlyPrices = _cachedTomorrowPrices!;
+        _targetDate = _cachedTomorrowDate!;
+        _isLoading = false; // Turn off the spinner immediately
+        _errorMessage = '';
+      });
+      return; // 🛑 EXIT EARLY!
+    }
+
+    // 2. FETCH FROM CLOUD (If not in cache)
+    setState(() {
+      _isLoading = true;
+      _errorMessage = ''; // Reset error state before trying
+    });
+
     try {
-      final response = await http.get(Uri.parse(_apiUrl));
+      final response = await http.get(Uri.parse('$_apiUrl/predict_prices?target=$_selectedDay'));
+
+      // 🔥 THE GOLDEN RULE: Stop if the user closed the screen while waiting
+      if (!mounted) return;
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        setState(() {
-          // THE VATTENFALL FIX:
-          // 1. Divide by 10 to get Wholesale ct/kWh
-          // 2. Add 15 cents for German grid fees/taxes
-          // 3. Multiply by 1.19 for standard German VAT
-          _hourlyPrices = List<double>.from(
-            data['hourly_prices'].map((x) {
-              double wholesaleCent = x.toDouble() / 10.0;
-              double retailCent = (wholesaleCent + 15.0) * 1.19;
-              return retailCent;
-            }),
-          );
 
-          _targetDate = data['date'];
+        // Transform the raw API prices into German Retail Prices
+        final fetchedPrices = List<double>.from(
+          data['hourly_prices'].map((x) {
+            double wholesaleCent = x.toDouble() / 10.0;
+            double retailCent = (wholesaleCent + 15.0) * 1.19;
+            return retailCent;
+          }),
+        );
+        final fetchedDate = data['date'];
+
+        setState(() {
+          // Update the active screen variables
+          _hourlyPrices = fetchedPrices;
+          _targetDate = fetchedDate;
+
+          // 3. SAVE TO GLOBAL CACHE FOR NEXT TIME
+          if (_selectedDay == 'today') {
+            _cachedTodayPrices = fetchedPrices;
+            _cachedTodayDate = fetchedDate;
+          } else {
+            _cachedTomorrowPrices = fetchedPrices;
+            _cachedTomorrowDate = fetchedDate;
+          }
+
           _isLoading = false;
         });
       } else {
@@ -62,8 +108,11 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
         });
       }
     } catch (e) {
+      // Catch network drops or server timeouts
+      if (!mounted) return;
+      print('🔥 CRITICAL NETWORK ERROR: $e');
       setState(() {
-        _errorMessage = 'Failed to connect to backend.';
+        _errorMessage = 'Failed to connect to backend. Please check your connection.';
         _isLoading = false;
       });
     }
@@ -83,8 +132,22 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: SegmentedButton<String>(
               segments: const [
-                ButtonSegment(value: 'today', label: Text('Today')),
-                ButtonSegment(value: 'tomorrow', label: Text('Tomorrow')),
+                ButtonSegment(
+                  value: 'today',
+                  label: Text(
+                    'Today',
+                    softWrap: false, // 🔥 Forbids the 'y' from dropping down
+                    overflow: TextOverflow.visible,
+                  ),
+                ),
+                ButtonSegment(
+                  value: 'tomorrow',
+                  label: Text(
+                    'Tomorrow',
+                    softWrap: false, // 🔥 Forbids the 'y' from dropping down
+                    overflow: TextOverflow.visible,
+                  ),
+                ),
               ],
               selected: {_selectedDay},
               onSelectionChanged: (Set<String> newSelection) {
@@ -101,7 +164,33 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : _errorMessage.isNotEmpty
                 ? Center(
-                    child: Text(_errorMessage, style: const TextStyle(color: Colors.red)),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.cloud_off, size: 64, color: Colors.redAccent.withAlpha(150)),
+                        const SizedBox(height: 16),
+                        Text(
+                          _errorMessage,
+                          style: const TextStyle(
+                            color: Colors.redAccent,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 24),
+                        ElevatedButton.icon(
+                          onPressed: _fetchLiveForecast,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Retry Connection'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: theme.colorScheme.primary,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ],
+                    ),
                   )
                 : _buildDashboardLayout(theme, isDark),
           ),

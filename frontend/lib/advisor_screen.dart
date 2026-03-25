@@ -6,9 +6,8 @@ import 'package:flutter/material.dart';
 import 'package:frontend/custom_app_bar.dart';
 import 'package:http/http.dart' as http;
 
-
 class AdvisorScreen extends StatefulWidget {
-  const AdvisorScreen({super.key,required this.themeNotifier});
+  const AdvisorScreen({super.key, required this.themeNotifier});
   final ValueNotifier<ThemeMode> themeNotifier;
 
   @override
@@ -19,17 +18,13 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
   final TextEditingController _gasBillController = TextEditingController(text: '180');
   double _houseSize = 120.0;
   String _insulationLevel = 'average';
-  
+
   bool _isLoading = false;
   Map<String, dynamic>? _roiData;
   String _errorMessage = '';
 
   String get _apiUrl {
-    const port = '5001';
-    const endpoint = '/simulate_investment';
-    if (kIsWeb) return 'http://127.0.0.1:$port$endpoint';
-    if (Platform.isAndroid) return 'http://10.0.2.2:$port$endpoint';
-    return 'http://127.0.0.1:$port$endpoint';
+    return 'https://energy-twin-de.onrender.com/simulate_investment';
   }
 
   Future<void> _calculateROI() async {
@@ -41,7 +36,11 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
     }
 
     FocusScope.of(context).unfocus();
-    setState(() { _isLoading = true; _errorMessage = ''; _roiData = null; });
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+      _roiData = null;
+    });
 
     try {
       final response = await http.post(
@@ -50,9 +49,12 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
         body: jsonEncode({
           'monthly_gas_bill_eur': userBill,
           'house_size_sqm': _houseSize,
-          'insulation_level': _insulationLevel
+          'insulation_level': _insulationLevel,
         }),
       );
+
+      // 🔥 ADD THE GOLDEN RULE HERE:
+      if (!mounted) return;
 
       if (response.statusCode == 200) {
         setState(() => _roiData = jsonDecode(response.body));
@@ -60,9 +62,14 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
         setState(() => _errorMessage = 'API Error: ${response.statusCode}');
       }
     } catch (e) {
+      // 🔥 AND HERE:
+      if (!mounted) return;
+
       setState(() => _errorMessage = 'Connection failed. Is Flask running?');
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
@@ -109,14 +116,23 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
         color: theme.colorScheme.surface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: isDark ? Colors.white10 : Colors.black12),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha(isDark ? 30 : 10), blurRadius: 20, offset: const Offset(0, 10))],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha(isDark ? 30 : 10),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('Property Details', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+          Text(
+            'Property Details',
+            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+          ),
           const SizedBox(height: 24),
-          
+
           // Row 1: Gas Bill & Insulation
           Row(
             children: [
@@ -151,7 +167,7 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
             ],
           ),
           const SizedBox(height: 32),
-          
+
           // Row 2: House Size Slider
           Text('House Size: ${_houseSize.toInt()} m²', style: theme.textTheme.titleMedium),
           Slider(
@@ -163,15 +179,24 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
             onChanged: (val) => setState(() => _houseSize = val),
           ),
           const SizedBox(height: 32),
-          
+
           // Calculate Button
           SizedBox(
             width: double.infinity,
             height: 56,
             child: ElevatedButton.icon(
               onPressed: _isLoading ? null : _calculateROI,
-              icon: _isLoading ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.auto_awesome),
-              label: const Text('Run Digital Twin Simulation', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              icon: _isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.auto_awesome),
+              label: const Text(
+                'Run Digital Twin Simulation',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
                 foregroundColor: Colors.white,
@@ -198,44 +223,72 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
           ),
           child: Column(
             children: [
-              Text('AI-Optimized Annual Savings', style: TextStyle(color: theme.colorScheme.primary, fontWeight: FontWeight.w700, fontSize: 16)),
+              Text(
+                'AI-Optimized Annual Savings',
+                style: TextStyle(
+                  color: theme.colorScheme.primary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 16,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text('€${_roiData!['ai_annual_savings_eur']}', style: theme.textTheme.displayMedium?.copyWith(fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+              Text(
+                '€${_roiData!['ai_annual_savings_eur']}',
+                style: theme.textTheme.displayMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: theme.colorScheme.primary,
+                ),
+              ),
               const SizedBox(height: 8),
-              Text('System pays for itself in ${_roiData!['estimated_roi_years']} Years', style: theme.textTheme.titleMedium),
+              Text(
+                'System pays for itself in ${_roiData!['estimated_roi_years']} Years',
+                style: theme.textTheme.titleMedium,
+              ),
             ],
           ),
         ),
         const SizedBox(height: 24),
-        
+
         // Data Cards Row
         Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(child: _buildDataCard(theme, isDark, Icons.thermostat, 'System Specs', [
-              'Thermal Demand: ${_roiData!['heat_demand_kwh']} kWh',
-              'Est. Efficiency (COP): ${_roiData!['cop_estimated']}',
-              'Electricity Used: ${_roiData!['hp_electricity_kwh']} kWh',
-            ])),
+            Expanded(
+              child: _buildDataCard(theme, isDark, Icons.thermostat, 'System Specs', [
+                'Thermal Demand: ${_roiData!['heat_demand_kwh']} kWh',
+                'Est. Efficiency (COP): ${_roiData!['cop_estimated']}',
+                'Electricity Used: ${_roiData!['hp_electricity_kwh']} kWh',
+              ]),
+            ),
             const SizedBox(width: 16),
-            Expanded(child: _buildDataCard(theme, isDark, Icons.euro, 'Financial Breakdown', [
-              'Old Gas Cost: €${_roiData!['current_yearly_gas_cost_eur']} / yr',
-              'New Elec Cost: €${_roiData!['smart_heatpump_cost_eur']} / yr',
-              'EnergyTwin AI shifted usage to off-peak hours.',
-            ])),
+            Expanded(
+              child: _buildDataCard(theme, isDark, Icons.euro, 'Financial Breakdown', [
+                'Old Gas Cost: €${_roiData!['current_yearly_gas_cost_eur']} / yr',
+                'New Elec Cost: €${_roiData!['smart_heatpump_cost_eur']} / yr',
+                'EnergyTwin AI shifted usage to off-peak hours.',
+              ]),
+            ),
             const SizedBox(width: 16),
-            Expanded(child: _buildDataCard(theme, isDark, Icons.eco, 'Environmental Impact', [
-              'CO2 Eliminated:',
-              '${_roiData!['co2_saved_kg']} kg / yr',
-              'Equivalent to planting ~${(_roiData!['co2_saved_kg'] / 21).toInt()} trees annually.',
-            ])),
+            Expanded(
+              child: _buildDataCard(theme, isDark, Icons.eco, 'Environmental Impact', [
+                'CO2 Eliminated:',
+                '${_roiData!['co2_saved_kg']} kg / yr',
+                'Equivalent to planting ~${(_roiData!['co2_saved_kg'] / 21).toInt()} trees annually.',
+              ]),
+            ),
           ],
         ),
       ],
     );
   }
 
-  Widget _buildDataCard(ThemeData theme, bool isDark, IconData icon, String title, List<String> lines) {
+  Widget _buildDataCard(
+    ThemeData theme,
+    bool isDark,
+    IconData icon,
+    String title,
+    List<String> lines,
+  ) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -250,14 +303,27 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
             children: [
               Icon(icon, color: theme.colorScheme.secondary, size: 24),
               const SizedBox(width: 12),
-              Expanded(child: Text(title, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold))),
+              Expanded(
+                child: Text(
+                  title,
+                  style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
-          ...lines.map((line) => Padding(
-            padding: const EdgeInsets.only(bottom: 8.0),
-            child: Text(line, style: theme.textTheme.bodyMedium?.copyWith(color: isDark ? Colors.white70 : Colors.black87, height: 1.4)),
-          )),
+          ...lines.map(
+            (line) => Padding(
+              padding: const EdgeInsets.only(bottom: 8.0),
+              child: Text(
+                line,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: isDark ? Colors.white70 : Colors.black87,
+                  height: 1.4,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -266,7 +332,10 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
   Widget _buildErrorCard(ThemeData theme) {
     return Container(
       padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(color: Colors.redAccent.withAlpha(25), borderRadius: BorderRadius.circular(16)),
+      decoration: BoxDecoration(
+        color: Colors.redAccent.withAlpha(25),
+        borderRadius: BorderRadius.circular(16),
+      ),
       child: Text(_errorMessage, style: const TextStyle(color: Colors.redAccent)),
     );
   }
