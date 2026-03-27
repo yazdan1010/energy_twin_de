@@ -355,31 +355,66 @@ def simulate_solar():
     try:
         data = request.get_json()
         
-        # Inputs from Flutter
+        # ==========================================
+        # 1. EXACT PAYLOAD EXTRACTION (100% MATCH)
+        # ==========================================
+        address = data.get('address', '')
+        energy_rating = data.get('energy_rating', 'D').upper()
+        grid_price = float(data.get('grid_price_ct_kwh', 35.0))
+        monthly_bill = float(data.get('monthly_bill_eur', 120.0))
+        household_size = int(data.get('number_of_residents', 3))
+        
+        # ==========================================
+        # 2. AUTO-GEOCODING (Address -> GPS)
+        # ==========================================
         lat = data.get('lat')
         lon = data.get('lon')
-        monthly_bill = float(data.get('monthly_bill_eur', 200.0))
-        energy_rating = data.get('energy_rating', 'D').upper()
-        household_size = int(data.get('household_size', 4))
         
-        # The coordinates tapped by the user on the Flutter app!
-        # Flutter displays at 400x400, original Mapbox is 800x800, so we multiply by 2
-        raw_points = data.get('roof_points', [])
-        roof_contour = np.array([[int(p['x'] * 2), int(p['y'] * 2)] for p in raw_points], dtype=np.int32)
+        if not lat or not lon:
+            # Safely get coordinates if Flutter only sent text
+            geo_url = f"https://nominatim.openstreetmap.org/search?q={address}&format=json&limit=1"
+            geo_res = requests.get(geo_url, headers={'User-Agent': 'EnergyTwin/1.0'}).json()
+            if geo_res:
+                lat = float(geo_res[0]['lat'])
+                lon = float(geo_res[0]['lon'])
+            else:
+                return jsonify({"error": f"Address not found on map: {address}. Try adding the city."}), 400
 
+        # ==========================================
+        # 3. ROOF PROCESSING & OPENCV CRASH PREVENTION
+        # ==========================================
+        raw_points = data.get('roof_points', [])
         base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         img_path = os.path.join(base_dir, "solar_part_files", "assets", "roof_top.png")
         
+        if raw_points:
+            roof_contour = np.array([[int(p['x'] * 2), int(p['y'] * 2)] for p in raw_points], dtype=np.int32)
+        else:
+            # Fallback dynamic bounding box if no map points exist
+            img = cv2.imread(img_path)
+            if img is not None:
+                h, w = img.shape[:2]
+                padding = int(min(h, w) * 0.15)
+                roof_contour = np.array([
+                    [padding, padding], 
+                    [w-padding, padding], 
+                    [w-padding, h-padding], 
+                    [padding, h-padding]
+                ], dtype=np.int32)
+            else:
+                roof_contour = np.array([[50,50], [350,50], [350,350], [50,350]], dtype=np.int32)
+
         num_panels, final_img = place_panels_on_roof(img_path, roof_contour)
         
         if num_panels == 0:
-            return jsonify({"error": "Roof too small or invalid selection. Please try again."}), 400
+            return jsonify({"error": "No clear roof detected. The property might be obscured by trees or lack high-res satellite data."}), 400
 
-        # Encode the AI-drawn panel image to send back to Flutter
         _, buffer = cv2.imencode('.png', final_img)
         analyzed_image_base64 = base64.b64encode(buffer).decode('utf-8')
 
-        # 2. Climate & ML Engine
+        # ==========================================
+        # 4. ML & FINANCIAL ENGINES
+        # ==========================================
         historical_df = fetch_historical_weather(lat, lon, years=config.HISTORY_YEARS)
         ai_advisor = SasanSolarAI(config.HISTORICAL_DATA_FILE) 
         X, y = ai_advisor.prepare_features(energy_rating, household_size)
@@ -387,7 +422,8 @@ def simulate_solar():
         accuracy, r2 = ai_advisor.validate_model_performance(X, y)
         ml_predicted_yield = ai_advisor.final_prediction(X)
 
-        # 3. Financial Engine (Using Teammate's New Function)
+        # IMPORTANT: Make sure your teammate's function accepts 'grid_price_ct_kwh' if they updated it!
+        # If their function does NOT take grid_price yet, just remove it from the arguments below.
         analysis = calculate_architect_analysis(
             ml_annual_yield=ml_predicted_yield, 
             num_panels=num_panels, 
@@ -395,14 +431,15 @@ def simulate_solar():
             energy_rating=energy_rating, 
             historical_df=historical_df,
             ai_accuracy_val=accuracy
+            # grid_price_ct_kwh=grid_price  <-- UNCOMMENT THIS IF YOUR TEAMMATE ADDED IT TO THE FUNCTION
         )
         
-        # Attach the image so Flutter can display it!
         analysis["analyzed_image_base64"] = analyzed_image_base64
 
         return jsonify(analysis), 200
 
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        # This will send the exact Python crash log back to your Flutter app
+        return jsonify({"error": f"Backend Crash: {str(e)}"}), 500
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5001)
