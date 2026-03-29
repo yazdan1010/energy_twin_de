@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:fl_chart/fl_chart.dart';
@@ -15,67 +16,74 @@ class PriceDashboardScreen extends StatefulWidget {
 
 class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
   List<double> _hourlyPrices = [];
-  bool _isLoading = _cachedTodayPrices == null;
+  bool _isLoading = true;
   String _errorMessage = '';
   String _targetDate = '';
 
-  //Keep track of which day the user wants to see
   String _selectedDay = 'today';
-  //  Cache memory boxes so we only fetch once!
   static List<double>? _cachedTodayPrices;
   static String? _cachedTodayDate;
   static List<double>? _cachedTomorrowPrices;
   static String? _cachedTomorrowDate;
 
-  String get _apiUrl {
-    return 'https://energy-twin-de.onrender.com';
-  }
+  // 🔥 STRICTLY POINTED TO LOCALHOST
 
   @override
   void initState() {
     super.initState();
-    _fetchLiveForecast();
+    // Quick cache check on boot
+    if (_selectedDay == 'today' && _cachedTodayPrices != null) {
+      _hourlyPrices = _cachedTodayPrices!;
+      _targetDate = _cachedTodayDate!;
+      _isLoading = false;
+    } else {
+      _fetchLiveForecast();
+    }
+  }
+
+  // 🔥 UPDATED: Using 'localhost' is often safer for Web/iOS simulators.
+  // NOTE: If you are using an ANDROID EMULATOR, change 'localhost' to '10.0.2.2'
+  String get _apiUrl {
+    return 'http://192.168.0.120:5001/';
   }
 
   Future<void> _fetchLiveForecast() async {
-    // 1. THE CACHE CHECK (The "Bouncer")
-    // If the data is already in our global memory, load it instantly and skip the API call!
     if (_selectedDay == 'today' && _cachedTodayPrices != null) {
       setState(() {
         _hourlyPrices = _cachedTodayPrices!;
         _targetDate = _cachedTodayDate!;
-        _isLoading = false; // Turn off the spinner immediately
-        _errorMessage = ''; // Clear any old errors
+        _isLoading = false;
+        _errorMessage = '';
       });
-      return; // 🛑 EXIT EARLY!
+      return;
     }
 
     if (_selectedDay == 'tomorrow' && _cachedTomorrowPrices != null) {
       setState(() {
         _hourlyPrices = _cachedTomorrowPrices!;
         _targetDate = _cachedTomorrowDate!;
-        _isLoading = false; // Turn off the spinner immediately
+        _isLoading = false;
         _errorMessage = '';
       });
-      return; // 🛑 EXIT EARLY!
+      return;
     }
 
-    // 2. FETCH FROM CLOUD (If not in cache)
     setState(() {
       _isLoading = true;
-      _errorMessage = ''; // Reset error state before trying
+      _errorMessage = '';
     });
 
     try {
-      final response = await http.get(Uri.parse('$_apiUrl/predict_prices?target=$_selectedDay'));
+      // 🔥 INCREASED TIMEOUT to 30 seconds to allow APIs to wake up
+      final response = await http
+          .get(Uri.parse('$_apiUrl/predict_prices?target=$_selectedDay'))
+          .timeout(const Duration(seconds: 100));
 
-      // 🔥 THE GOLDEN RULE: Stop if the user closed the screen while waiting
       if (!mounted) return;
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
 
-        // Transform the raw API prices into German Retail Prices
         final fetchedPrices = List<double>.from(
           data['hourly_prices'].map((x) {
             double wholesaleCent = x.toDouble() / 10.0;
@@ -86,11 +94,9 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
         final fetchedDate = data['date'];
 
         setState(() {
-          // Update the active screen variables
           _hourlyPrices = fetchedPrices;
           _targetDate = fetchedDate;
 
-          // 3. SAVE TO GLOBAL CACHE FOR NEXT TIME
           if (_selectedDay == 'today') {
             _cachedTodayPrices = fetchedPrices;
             _cachedTodayDate = fetchedDate;
@@ -98,21 +104,20 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
             _cachedTomorrowPrices = fetchedPrices;
             _cachedTomorrowDate = fetchedDate;
           }
-
           _isLoading = false;
         });
       } else {
         setState(() {
-          _errorMessage = 'API Error: ${response.statusCode}';
+          _errorMessage = 'API Error: ${response.statusCode}\n${response.body}';
           _isLoading = false;
         });
       }
     } catch (e) {
-      // Catch network drops or server timeouts
       if (!mounted) return;
-      print('🔥 CRITICAL NETWORK ERROR: $e');
+      print('🔥 CRITICAL ERROR: $e');
       setState(() {
-        _errorMessage = 'Failed to connect to backend. Please check your connection.';
+        // 🔥 SHOW THE EXACT ERROR ON SCREEN
+        _errorMessage = 'Connection Error:\n$e';
         _isLoading = false;
       });
     }
@@ -127,38 +132,21 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
       appBar: CustomAppBar(themeNotifier: widget.themeNotifier, title: 'EnergyTwin Command Center'),
       body: Column(
         children: [
-          // The Today / Tomorrow Toggle Switch
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 16.0),
             child: SegmentedButton<String>(
               segments: const [
-                ButtonSegment(
-                  value: 'today',
-                  label: Text(
-                    'Today',
-                    softWrap: false, // 🔥 Forbids the 'y' from dropping down
-                    overflow: TextOverflow.visible,
-                  ),
-                ),
-                ButtonSegment(
-                  value: 'tomorrow',
-                  label: Text(
-                    'Tomorrow',
-                    softWrap: false, // 🔥 Forbids the 'y' from dropping down
-                    overflow: TextOverflow.visible,
-                  ),
-                ),
+                ButtonSegment(value: 'today', label: Text('Today', softWrap: false)),
+                ButtonSegment(value: 'tomorrow', label: Text('Tomorrow', softWrap: false)),
               ],
               selected: {_selectedDay},
               onSelectionChanged: (Set<String> newSelection) {
-                setState(() {
-                  _selectedDay = newSelection.first;
-                });
-                _fetchLiveForecast(); // Re-fetch the data when clicked!
+                setState(() => _selectedDay = newSelection.first);
+                _fetchLiveForecast();
               },
             ),
           ),
-          SizedBox(height: 30),
+          const SizedBox(height: 30),
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
@@ -201,31 +189,24 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
 
   Widget _buildDashboardLayout(ThemeData theme, bool isDark) {
     int currentHour = DateTime.now().hour;
-
-    // 1. Time-Aware Logic (Today vs Tomorrow)
     int searchStartHour = _selectedDay == 'today' ? (currentHour + 1) : 0;
     if (searchStartHour > 23) searchStartHour = 23;
 
     List<double> futurePrices = _hourlyPrices.isNotEmpty
         ? _hourlyPrices.sublist(searchStartHour)
         : [];
-
     double minPrice = futurePrices.isNotEmpty
         ? futurePrices.reduce((curr, next) => curr < next ? curr : next)
         : 0.0;
-
     int bestHour = futurePrices.isNotEmpty ? futurePrices.indexOf(minPrice) + searchStartHour : 0;
 
-    // 2. Calculate Current Price and Average Price
     double currentPrice = 0.0;
     double averagePrice = 0.0;
-
     if (_hourlyPrices.isNotEmpty) {
       currentPrice = _selectedDay == 'today' ? _hourlyPrices[currentHour] : _hourlyPrices[0];
       averagePrice = _hourlyPrices.reduce((a, b) => a + b) / _hourlyPrices.length;
     }
 
-    // 3. Dynamic KPI Card Content
     String card1Title = _selectedDay == 'today' ? 'Current Spot Price' : 'Average Daily Price';
     String card1Value = _selectedDay == 'today'
         ? '${currentPrice.toStringAsFixed(1)} ct'
@@ -254,10 +235,8 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
           constraints: const BoxConstraints(maxWidth: 1200),
           child: LayoutBuilder(
             builder: (context, constraints) {
-              // Determine if we are on a wide screen (desktop/tablet) or narrow screen (mobile)
               final isWideScreen = constraints.maxWidth > 800;
 
-              // Build the top row of KPI cards
               Widget kpiSection = isWideScreen
                   ? Row(
                       children: [
@@ -332,7 +311,6 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
                       ],
                     );
 
-              // Build the bottom section with Chart and Grid Intelligence
               Widget bottomSection = isWideScreen
                   ? Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -361,7 +339,6 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
     );
   }
 
-  // NOTE: Removed the 'width' parameter so it fluidly fills the Expanded widget
   Widget _buildKPICard(
     ThemeData theme,
     bool isDark, {
@@ -423,16 +400,22 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
 
   Widget _buildChartCard(ThemeData theme, bool isDark) {
     int currentHour = DateTime.now().hour;
-    // 1. Calculate dynamic Y-axis limits (Min - 5, Max + 5)
     double minY = 0.0;
-    double maxY = 100.0; // Safe fallback
+    double maxY = 100.0;
 
     if (_hourlyPrices.isNotEmpty) {
       double minPrice = _hourlyPrices.reduce((a, b) => a < b ? a : b);
       double maxPrice = _hourlyPrices.reduce((a, b) => a > b ? a : b);
       minY = minPrice - 3.0;
       maxY = maxPrice + 3.0;
+      if (minY == maxY) {
+        minY -= 10;
+        maxY += 10;
+      } // Failsafe for flatlining charts
     }
+
+    double rawInterval = ((maxY - minY) / 5).ceilToDouble();
+    double chartInterval = rawInterval == 0 ? 1 : rawInterval; // Failsafe division by zero
 
     List<FlSpot> visibleSpots = _hourlyPrices
         .asMap()
@@ -466,12 +449,10 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
           Expanded(
             child: LineChart(
               LineChartData(
-                // 2. APPLY THE DYNAMIC Y-AXIS LIMITS HERE
                 minY: minY,
                 maxY: maxY,
                 minX: 0,
                 maxX: 23,
-
                 extraLinesData: ExtraLinesData(
                   verticalLines: _selectedDay == 'today'
                       ? [
@@ -480,16 +461,6 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
                             color: Colors.redAccent,
                             strokeWidth: 1,
                             dashArray: [5, 5],
-                            label: VerticalLineLabel(
-                              show: true,
-                              labelResolver: (line) => '',
-                              style: const TextStyle(
-                                color: Colors.redAccent,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 12,
-                              ),
-                              alignment: Alignment.topRight,
-                            ),
                           ),
                         ]
                       : [],
@@ -525,10 +496,8 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
                     sideTitles: SideTitles(
                       showTitles: true,
                       reservedSize: 45,
-                      // We can optionally set the Y-axis interval to scale nicely with the new limits
-                      interval: ((maxY - minY) / 5).ceilToDouble(),
+                      interval: chartInterval,
                       getTitlesWidget: (value, meta) {
-                        // Only show titles that make sense within our limits to avoid clutter
                         if (value == minY || value == maxY) return const SizedBox.shrink();
                         return Text(
                           '${value.toInt()} ct',
@@ -550,17 +519,14 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
                     barWidth: 3,
                     dotData: FlDotData(
                       show: true,
-                      checkToShowDot: (spot, barData) {
-                        return _selectedDay == 'today' && spot.x.toInt() == currentHour;
-                      },
-                      getDotPainter: (spot, percent, barData, index) {
-                        return FlDotCirclePainter(
-                          radius: 6,
-                          color: Colors.redAccent,
-                          strokeWidth: 3,
-                          strokeColor: theme.colorScheme.surface,
-                        );
-                      },
+                      checkToShowDot: (spot, barData) =>
+                          _selectedDay == 'today' && spot.x.toInt() == currentHour,
+                      getDotPainter: (spot, percent, barData, index) => FlDotCirclePainter(
+                        radius: 6,
+                        color: Colors.redAccent,
+                        strokeWidth: 3,
+                        strokeColor: theme.colorScheme.surface,
+                      ),
                     ),
                     belowBarData: BarAreaData(
                       show: true,
@@ -594,7 +560,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
 
   Widget _buildGridContextCard(ThemeData theme, bool isDark) {
     return Container(
-      height: 400, // MATCHES THE CHART HEIGHT
+      height: 400,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: theme.colorScheme.surface,
@@ -606,7 +572,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
             blurRadius: 15,
             offset: const Offset(0, 8),
           ),
-        ], // ADDED MISSING SHADOW
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -616,7 +582,6 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
             style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 16),
-          // EXPANDED fills the remaining space, SPACE_BETWEEN distributes the rows evenly
           Expanded(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
@@ -666,7 +631,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
     return Row(
       children: [
         Container(
-          padding: const EdgeInsets.all(12), // Slightly larger padding for better proportion
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: color.withAlpha(25),
             borderRadius: BorderRadius.circular(12),
@@ -680,7 +645,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(title, style: theme.textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4), // Breathing room for the text
+              const SizedBox(height: 4),
               Text(
                 subtitle,
                 style: theme.textTheme.bodySmall?.copyWith(

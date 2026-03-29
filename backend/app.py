@@ -418,4 +418,10 @@ def simulate_solar():
     except Exception as e:
         return jsonify({"error": f"Backend Crash: {str(e)}"}), 500
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    # 🔥 THE RENDER 502 FIX:
+    # Grab the dynamic port from Render's environment variables. 
+    # If it doesn't exist (because we are on local Mac), default to 5001.
+    port = int(os.environ.get('PORT', 5001))
+    
+    # Turn off debug mode for production safety
+    app.run(host='0.0.0.0', port=port, debug=False)

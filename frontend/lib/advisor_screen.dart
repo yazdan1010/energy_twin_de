@@ -24,7 +24,17 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
   String _errorMessage = '';
 
   String get _apiUrl {
-    return 'https://energy-twin-de.onrender.com/simulate_investment';
+    return 'http://127.0.0.1:5001/simulate_investment';
+  }
+
+  // 🔥 PRESENTATION MAGIC: Auto-calculates the gas bill based on size and insulation
+  void _updateEstimatedBill() {
+    double multiplier = 1.5; // Average insulation baseline
+    if (_insulationLevel == 'poor') multiplier = 2.0; // Needs more heating
+    if (_insulationLevel == 'good') multiplier = 1.0; // Highly efficient
+
+    // Instantly update the text field
+    _gasBillController.text = (_houseSize * multiplier).toStringAsFixed(0);
   }
 
   Future<void> _calculateROI() async {
@@ -53,7 +63,6 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
         }),
       );
 
-      // 🔥 ADD THE GOLDEN RULE HERE:
       if (!mounted) return;
 
       if (response.statusCode == 200) {
@@ -62,9 +71,7 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
         setState(() => _errorMessage = 'API Error: ${response.statusCode}');
       }
     } catch (e) {
-      // 🔥 AND HERE:
       if (!mounted) return;
-
       setState(() => _errorMessage = 'Connection failed. Is Flask running?');
     } finally {
       if (mounted) {
@@ -88,7 +95,7 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
       appBar: CustomAppBar(themeNotifier: widget.themeNotifier, title: 'Home Energy Audit'),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 800), // Wider for rich data
+          constraints: const BoxConstraints(maxWidth: 800),
           child: CustomScrollView(
             slivers: [
               SliverPadding(
@@ -150,7 +157,7 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
               const SizedBox(width: 24),
               Expanded(
                 child: DropdownButtonFormField<String>(
-                  initialValue: _insulationLevel,
+                  value: _insulationLevel,
                   decoration: InputDecoration(
                     labelText: 'Insulation Quality',
                     prefixIcon: const Icon(Icons.home_work),
@@ -161,7 +168,12 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
                     DropdownMenuItem(value: 'average', child: Text('Average (Standard)')),
                     DropdownMenuItem(value: 'good', child: Text('Good (Modern/Renovated)')),
                   ],
-                  onChanged: (val) => setState(() => _insulationLevel = val!),
+                  onChanged: (val) {
+                    setState(() {
+                      _insulationLevel = val!;
+                      _updateEstimatedBill(); // 🔥 Instantly updates the bill based on insulation
+                    });
+                  },
                 ),
               ),
             ],
@@ -176,7 +188,12 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
             max: 300,
             divisions: 25,
             activeColor: theme.colorScheme.primary,
-            onChanged: (val) => setState(() => _houseSize = val),
+            onChanged: (val) {
+              setState(() {
+                _houseSize = val;
+                _updateEstimatedBill(); // 🔥 Instantly updates the bill while dragging
+              });
+            },
           ),
           const SizedBox(height: 32),
 
