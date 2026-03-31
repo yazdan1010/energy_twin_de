@@ -9,7 +9,7 @@ void main() {
   runApp(const EnergyTwinApp());
 }
 
-class EnergyTwinApp extends StatelessWidget {
+class EnergyTwinApp extends StatelessWidget { 
   const EnergyTwinApp({super.key});
 
   @override

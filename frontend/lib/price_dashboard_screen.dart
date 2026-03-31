@@ -43,86 +43,99 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
 
   // 🔥 UPDATED: Using 'localhost' is often safer for Web/iOS simulators.
   // NOTE: If you are using an ANDROID EMULATOR, change 'localhost' to '10.0.2.2'
+ // In PriceDashboardScreen
   String get _apiUrl {
-    return 'http://192.168.0.120:5001/';
+    // 🔥 Updated from local IP to Render URL
+    return 'https://energy-twin-de.onrender.com'; 
   }
 
   Future<void> _fetchLiveForecast() async {
-    if (_selectedDay == 'today' && _cachedTodayPrices != null) {
-      setState(() {
-        _hourlyPrices = _cachedTodayPrices!;
-        _targetDate = _cachedTodayDate!;
-        _isLoading = false;
-        _errorMessage = '';
-      });
-      return;
-    }
-
-    if (_selectedDay == 'tomorrow' && _cachedTomorrowPrices != null) {
-      setState(() {
-        _hourlyPrices = _cachedTomorrowPrices!;
-        _targetDate = _cachedTomorrowDate!;
-        _isLoading = false;
-        _errorMessage = '';
-      });
-      return;
-    }
-
+  // 1. THE BOUNCER: Check the Cache first
+  if (_selectedDay == 'today' && _cachedTodayPrices != null) {
     setState(() {
-      _isLoading = true;
+      _hourlyPrices = _cachedTodayPrices!;
+      _targetDate = _cachedTodayDate!;
+      _isLoading = false;
       _errorMessage = '';
     });
+    return;
+  }
+  if (_selectedDay == 'tomorrow' && _cachedTomorrowPrices != null) {
+    setState(() {
+      _hourlyPrices = _cachedTomorrowPrices!;
+      _targetDate = _cachedTomorrowDate!;
+      _isLoading = false;
+      _errorMessage = '';
+    });
+    return;
+  }
 
-    try {
-      // 🔥 INCREASED TIMEOUT to 30 seconds to allow APIs to wake up
-      final response = await http
-          .get(Uri.parse('$_apiUrl/predict_prices?target=$_selectedDay'))
-          .timeout(const Duration(seconds: 100));
+  // 2. PREPARE FOR FETCH
+  setState(() {
+    _isLoading = true;
+    _errorMessage = '';
+  });
 
-      if (!mounted) return;
+  try {
+    
+    final String fullUrl = '$_apiUrl/predict_prices?target=$_selectedDay';
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
+    // 4. THE FETCH WITH TIMEOUT
+    final response = await http
+        .get(Uri.parse(fullUrl))
+        .timeout(const Duration(seconds: 30));
 
-        final fetchedPrices = List<double>.from(
-          data['hourly_prices'].map((x) {
-            double wholesaleCent = x.toDouble() / 10.0;
-            double retailCent = (wholesaleCent + 15.0) * 1.19;
-            return retailCent;
-          }),
-        );
-        final fetchedDate = data['date'];
+    if (!mounted) return;
 
-        setState(() {
-          _hourlyPrices = fetchedPrices;
-          _targetDate = fetchedDate;
+    if (response.statusCode == 200) {
+      final data = jsonDecode(response.body);
+      
+      // 5. DATA TRANSFORMATION (Wholesale MWh -> Retail ct/kWh)
+      // Math: (Wholesale / 10 to get cents) + 15ct tax/fees * 1.19 VAT
+      final fetchedPrices = List<double>.from(
+        data['hourly_prices'].map((x) {
+          double wholesaleCent = x.toDouble() / 10.0;
+          return (wholesaleCent + 15.0) * 1.19;
+        }),
+      );
+      
+      final fetchedDate = data['date'] ?? 'Unknown Date';
 
-          if (_selectedDay == 'today') {
-            _cachedTodayPrices = fetchedPrices;
-            _cachedTodayDate = fetchedDate;
-          } else {
-            _cachedTomorrowPrices = fetchedPrices;
-            _cachedTomorrowDate = fetchedDate;
-          }
-          _isLoading = false;
-        });
-      } else {
-        setState(() {
-          _errorMessage = 'API Error: ${response.statusCode}\n${response.body}';
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
-      print('🔥 CRITICAL ERROR: $e');
       setState(() {
-        // 🔥 SHOW THE EXACT ERROR ON SCREEN
-        _errorMessage = 'Connection Error:\n$e';
+        _hourlyPrices = fetchedPrices;
+        _targetDate = fetchedDate;
+
+        // 6. UPDATE GLOBAL CACHE
+        if (_selectedDay == 'today') {
+          _cachedTodayPrices = fetchedPrices;
+          _cachedTodayDate = fetchedDate;
+        } else {
+          _cachedTomorrowPrices = fetchedPrices;
+          _cachedTomorrowDate = fetchedDate;
+        }
+        _isLoading = false;
+      });
+      print('✅ Price Data Synced Successfully');
+    } else {
+      setState(() {
+        _errorMessage = 'Server Error: ${response.statusCode}';
         _isLoading = false;
       });
     }
+  } on TimeoutException catch (_) {
+    setState(() {
+      _errorMessage = 'Connection Timeout: The AI is taking too long to respond.';
+      _isLoading = false;
+    });
+  } catch (e) {
+    if (!mounted) return;
+    print('🔥 DASHBOARD CRASH AVERTED: $e');
+    setState(() {
+      _errorMessage = 'Backend Unreachable. Ensure Flask is running on port 5001.';
+      _isLoading = false;
+    });
   }
-
+}
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);

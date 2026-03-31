@@ -35,7 +35,8 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
   Map<String, dynamic>? _analysisData;
 
   String get _baseUrl {
-    return 'http://192.168.0.120:5001'; 
+    // 🔥 Updated from local IP to Render URL
+    return 'https://energy-twin-de.onrender.com'; 
   }
 
   @override

@@ -24,7 +24,8 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
   String _errorMessage = '';
 
   String get _apiUrl {
-    return 'http://127.0.0.1:5001/simulate_investment';
+    // 🔥 Updated from local IP to Render URL
+    return 'https://energy-twin-de.onrender.com/simulate_investment';
   }
 
   // 🔥 PRESENTATION MAGIC: Auto-calculates the gas bill based on size and insulation
