@@ -83,7 +83,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
     // 4. THE FETCH WITH TIMEOUT
     final response = await http
         .get(Uri.parse(fullUrl))
-        .timeout(const Duration(seconds: 30));
+        .timeout(const Duration(seconds: 60));
 
     if (!mounted) return;
 
@@ -124,14 +124,13 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
     }
   } on TimeoutException catch (_) {
     setState(() {
-      _errorMessage = 'Connection Timeout: The AI is taking too long to respond.';
+      _errorMessage = 'Server is still waking up (Render cold start). Please retry in a moment.';
       _isLoading = false;
     });
   } catch (e) {
     if (!mounted) return;
-    print('🔥 DASHBOARD CRASH AVERTED: $e');
     setState(() {
-      _errorMessage = 'Backend Unreachable. Ensure Flask is running on port 5001.';
+      _errorMessage = 'Backend unreachable. The server may be waking up — please retry.';
       _isLoading = false;
     });
   }

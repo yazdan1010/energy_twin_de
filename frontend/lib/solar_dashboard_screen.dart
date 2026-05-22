@@ -1,6 +1,4 @@
 import 'dart:convert';
-import 'dart:io';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:fl_chart/fl_chart.dart';
@@ -56,11 +54,13 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
     setState(() { _isLoading = true; _errorMessage = ''; });
 
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/get_roof'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'address': _addressController.text}),
-      );
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/get_roof'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'address': _addressController.text}),
+          )
+          .timeout(const Duration(seconds: 60));
 
       if (!mounted) return;
 
@@ -91,19 +91,21 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
     setState(() { _isLoading = true; _errorMessage = ''; });
 
     try {
-      final response = await http.post(
-        Uri.parse('$_baseUrl/simulate_solar'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'lat': _lat,
-          'lon': _lon,
-          'monthly_bill_eur': double.tryParse(_billController.text) ?? 150.0,
-          'energy_rating': _energyRating,
-          'household_size': int.tryParse(_householdController.text) ?? 4,
-          'grid_price_ct_kwh': double.tryParse(_gridPriceController.text) ?? 35.0,
-          'roof_points': _roofPoints.map((p) => {'x': p.dx, 'y': p.dy}).toList(),
-        }),
-      );
+      final response = await http
+          .post(
+            Uri.parse('$_baseUrl/simulate_solar'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'lat': _lat,
+              'lon': _lon,
+              'monthly_bill_eur': double.tryParse(_billController.text) ?? 150.0,
+              'energy_rating': _energyRating,
+              'household_size': int.tryParse(_householdController.text) ?? 4,
+              'grid_price_ct_kwh': double.tryParse(_gridPriceController.text) ?? 35.0,
+              'roof_points': _roofPoints.map((p) => {'x': p.dx, 'y': p.dy}).toList(),
+            }),
+          )
+          .timeout(const Duration(seconds: 90));
 
       if (!mounted) return;
 

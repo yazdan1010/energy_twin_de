@@ -1,7 +1,5 @@
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/custom_app_bar.dart';
 import 'package:http/http.dart' as http;
@@ -54,15 +52,17 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
     });
 
     try {
-      final response = await http.post(
-        Uri.parse(_apiUrl),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'monthly_gas_bill_eur': userBill,
-          'house_size_sqm': _houseSize,
-          'insulation_level': _insulationLevel,
-        }),
-      );
+      final response = await http
+          .post(
+            Uri.parse(_apiUrl),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'monthly_gas_bill_eur': userBill,
+              'house_size_sqm': _houseSize,
+              'insulation_level': _insulationLevel,
+            }),
+          )
+          .timeout(const Duration(seconds: 60));
 
       if (!mounted) return;
 
