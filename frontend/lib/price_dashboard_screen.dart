@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/custom_app_bar.dart';
+import 'package:frontend/main.dart' show serverWarmup, kBackendUrl;
 import 'package:http/http.dart' as http;
 
 class PriceDashboardScreen extends StatefulWidget {
@@ -19,6 +20,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
   bool _isLoading = true;
   String _errorMessage = '';
   String _targetDate = '';
+  String _loadingMessage = 'Loading prices...';
 
   String _selectedDay = 'today';
   static List<double>? _cachedTodayPrices;
@@ -41,100 +43,97 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
     }
   }
 
-  // 🔥 UPDATED: Using 'localhost' is often safer for Web/iOS simulators.
-  // NOTE: If you are using an ANDROID EMULATOR, change 'localhost' to '10.0.2.2'
- // In PriceDashboardScreen
-  String get _apiUrl {
-    // 🔥 Updated from local IP to Render URL
-    return 'https://energy-twin-de.onrender.com'; 
-  }
-
-  Future<void> _fetchLiveForecast() async {
-  // 1. THE BOUNCER: Check the Cache first
-  if (_selectedDay == 'today' && _cachedTodayPrices != null) {
-    setState(() {
-      _hourlyPrices = _cachedTodayPrices!;
-      _targetDate = _cachedTodayDate!;
-      _isLoading = false;
-      _errorMessage = '';
-    });
-    return;
-  }
-  if (_selectedDay == 'tomorrow' && _cachedTomorrowPrices != null) {
-    setState(() {
-      _hourlyPrices = _cachedTomorrowPrices!;
-      _targetDate = _cachedTomorrowDate!;
-      _isLoading = false;
-      _errorMessage = '';
-    });
-    return;
-  }
-
-  // 2. PREPARE FOR FETCH
-  setState(() {
-    _isLoading = true;
-    _errorMessage = '';
-  });
-
-  try {
-    
-    final String fullUrl = '$_apiUrl/predict_prices?target=$_selectedDay';
-
-    // 4. THE FETCH WITH TIMEOUT
-    final response = await http
-        .get(Uri.parse(fullUrl))
-        .timeout(const Duration(seconds: 60));
-
-    if (!mounted) return;
-
-    if (response.statusCode == 200) {
-      final data = jsonDecode(response.body);
-      
-      // 5. DATA TRANSFORMATION (Wholesale MWh -> Retail ct/kWh)
-      // Math: (Wholesale / 10 to get cents) + 15ct tax/fees * 1.19 VAT
-      final fetchedPrices = List<double>.from(
-        data['hourly_prices'].map((x) {
-          double wholesaleCent = x.toDouble() / 10.0;
-          return (wholesaleCent + 15.0) * 1.19;
-        }),
-      );
-      
-      final fetchedDate = data['date'] ?? 'Unknown Date';
-
+  Future<void> _fetchLiveForecast({int attempt = 1}) async {
+    // Serve from cache instantly if available
+    if (_selectedDay == 'today' && _cachedTodayPrices != null) {
       setState(() {
-        _hourlyPrices = fetchedPrices;
-        _targetDate = fetchedDate;
-
-        // 6. UPDATE GLOBAL CACHE
-        if (_selectedDay == 'today') {
-          _cachedTodayPrices = fetchedPrices;
-          _cachedTodayDate = fetchedDate;
-        } else {
-          _cachedTomorrowPrices = fetchedPrices;
-          _cachedTomorrowDate = fetchedDate;
-        }
+        _hourlyPrices = _cachedTodayPrices!;
+        _targetDate = _cachedTodayDate!;
         _isLoading = false;
+        _errorMessage = '';
       });
-      print('✅ Price Data Synced Successfully');
-    } else {
-      setState(() {
-        _errorMessage = 'Server Error: ${response.statusCode}';
-        _isLoading = false;
-      });
+      return;
     }
-  } on TimeoutException catch (_) {
+    if (_selectedDay == 'tomorrow' && _cachedTomorrowPrices != null) {
+      setState(() {
+        _hourlyPrices = _cachedTomorrowPrices!;
+        _targetDate = _cachedTomorrowDate!;
+        _isLoading = false;
+        _errorMessage = '';
+      });
+      return;
+    }
+
     setState(() {
-      _errorMessage = 'Server is still waking up (Render cold start). Please retry in a moment.';
-      _isLoading = false;
+      _isLoading = true;
+      _errorMessage = '';
+      _loadingMessage = attempt == 1 ? 'Connecting to server...' : 'Retrying... (attempt $attempt of 3)';
     });
-  } catch (e) {
+
+    // Schedule progressively friendlier messages so the user is never confused
+    Future.delayed(const Duration(seconds: 6), () {
+      if (mounted && _isLoading) setState(() => _loadingMessage = 'Server is warming up...');
+    });
+    Future.delayed(const Duration(seconds: 35), () {
+      if (mounted && _isLoading) setState(() => _loadingMessage = 'Almost there...');
+    });
+
+    // Wait for the shared warmup ping that fired at app launch.
+    // If the server is already warm this resolves instantly.
+    await serverWarmup;
+
     if (!mounted) return;
-    setState(() {
-      _errorMessage = 'Backend unreachable. The server may be waking up — please retry.';
-      _isLoading = false;
-    });
+
+    try {
+      final response = await http
+          .get(Uri.parse('$kBackendUrl/predict_prices?target=$_selectedDay'))
+          .timeout(const Duration(seconds: 30));
+
+      if (!mounted) return;
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final fetchedPrices = List<double>.from(
+          data['hourly_prices'].map((x) {
+            double wholesaleCent = x.toDouble() / 10.0;
+            return (wholesaleCent + 15.0) * 1.19;
+          }),
+        );
+        final fetchedDate = data['date'] ?? 'Unknown Date';
+        setState(() {
+          _hourlyPrices = fetchedPrices;
+          _targetDate = fetchedDate;
+          if (_selectedDay == 'today') {
+            _cachedTodayPrices = fetchedPrices;
+            _cachedTodayDate = fetchedDate;
+          } else {
+            _cachedTomorrowPrices = fetchedPrices;
+            _cachedTomorrowDate = fetchedDate;
+          }
+          _isLoading = false;
+        });
+      } else if (attempt < 3) {
+        await Future.delayed(const Duration(seconds: 3));
+        if (mounted) _fetchLiveForecast(attempt: attempt + 1);
+      } else {
+        setState(() {
+          _errorMessage = 'Server returned error ${response.statusCode}. Please try again.';
+          _isLoading = false;
+        });
+      }
+    } catch (_) {
+      if (!mounted) return;
+      if (attempt < 3) {
+        await Future.delayed(const Duration(seconds: 3));
+        if (mounted) _fetchLiveForecast(attempt: attempt + 1);
+      } else {
+        setState(() {
+          _errorMessage = 'Could not reach server after 3 attempts. Check your connection.';
+          _isLoading = false;
+        });
+      }
+    }
   }
-}
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -161,7 +160,22 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> {
           const SizedBox(height: 30),
           Expanded(
             child: _isLoading
-                ? const Center(child: CircularProgressIndicator())
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const CircularProgressIndicator(),
+                        const SizedBox(height: 20),
+                        Text(
+                          _loadingMessage,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.onSurface.withAlpha(150),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
                 : _errorMessage.isNotEmpty
                 ? Center(
                     child: Column(

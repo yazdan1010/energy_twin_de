@@ -3,6 +3,17 @@ import 'package:frontend/advisor_screen.dart';
 import 'package:frontend/price_dashboard_screen.dart';
 import 'package:frontend/solar_dashboard_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:http/http.dart' as http;
+
+const kBackendUrl = 'https://energy-twin-de.onrender.com';
+
+// Fires the moment the app launches — wakes Render before the user touches anything.
+// All screens await this future; if the server is already warm it resolves instantly.
+final Future<void> serverWarmup = http
+    .get(Uri.parse('$kBackendUrl/'))
+    .timeout(const Duration(seconds: 90))
+    .then((_) {})
+    .catchError((_) {});
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
 void main() {

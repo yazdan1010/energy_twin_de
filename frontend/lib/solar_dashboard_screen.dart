@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:frontend/custom_app_bar.dart';
+import 'package:frontend/main.dart' show serverWarmup, kBackendUrl;
 
 class SolarDashboardScreen extends StatefulWidget {
   final ValueNotifier<ThemeMode> themeNotifier;
@@ -32,10 +33,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
 
   Map<String, dynamic>? _analysisData;
 
-  String get _baseUrl {
-    // 🔥 Updated from local IP to Render URL
-    return 'https://energy-twin-de.onrender.com'; 
-  }
+  String _loadingMessage = 'Connecting...';
 
   @override
   void dispose() {
@@ -49,18 +47,35 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
   // ==========================================
   // API CALLS
   // ==========================================
-  Future<void> _fetchRoofImage() async {
+  void _startLoadingMessages() {
+    Future.delayed(const Duration(seconds: 6), () {
+      if (mounted && _isLoading) setState(() => _loadingMessage = 'Server is warming up...');
+    });
+    Future.delayed(const Duration(seconds: 35), () {
+      if (mounted && _isLoading) setState(() => _loadingMessage = 'Almost there...');
+    });
+  }
+
+  Future<void> _fetchRoofImage({int attempt = 1}) async {
     if (_addressController.text.isEmpty) return;
-    setState(() { _isLoading = true; _errorMessage = ''; });
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+      _loadingMessage = attempt == 1 ? 'Finding your roof...' : 'Retrying... (attempt $attempt of 3)';
+    });
+    _startLoadingMessages();
+
+    await serverWarmup;
+    if (!mounted) return;
 
     try {
       final response = await http
           .post(
-            Uri.parse('$_baseUrl/get_roof'),
+            Uri.parse('$kBackendUrl/get_roof'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({'address': _addressController.text}),
           )
-          .timeout(const Duration(seconds: 60));
+          .timeout(const Duration(seconds: 30));
 
       if (!mounted) return;
 
@@ -71,29 +86,45 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
           _lat = data['lat'];
           _lon = data['lon'];
           _roofPoints.clear();
-          _currentStep = 1; 
+          _currentStep = 1;
           _isLoading = false;
         });
+      } else if (attempt < 3) {
+        await Future.delayed(const Duration(seconds: 3));
+        if (mounted) _fetchRoofImage(attempt: attempt + 1);
       } else {
         setState(() { _errorMessage = 'Could not find address.'; _isLoading = false; });
       }
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
-      setState(() { _errorMessage = 'Server error.'; _isLoading = false; });
+      if (attempt < 3) {
+        await Future.delayed(const Duration(seconds: 3));
+        if (mounted) _fetchRoofImage(attempt: attempt + 1);
+      } else {
+        setState(() { _errorMessage = 'Server error. Please try again.'; _isLoading = false; });
+      }
     }
   }
 
-  Future<void> _runSimulation() async {
+  Future<void> _runSimulation({int attempt = 1}) async {
     if (_roofPoints.length < 3) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Tap at least 3 corners on the roof!")));
       return;
     }
-    setState(() { _isLoading = true; _errorMessage = ''; });
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+      _loadingMessage = attempt == 1 ? 'Running solar simulation...' : 'Retrying... (attempt $attempt of 3)';
+    });
+    _startLoadingMessages();
+
+    await serverWarmup;
+    if (!mounted) return;
 
     try {
       final response = await http
           .post(
-            Uri.parse('$_baseUrl/simulate_solar'),
+            Uri.parse('$kBackendUrl/simulate_solar'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'lat': _lat,
@@ -105,22 +136,30 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
               'roof_points': _roofPoints.map((p) => {'x': p.dx, 'y': p.dy}).toList(),
             }),
           )
-          .timeout(const Duration(seconds: 90));
+          .timeout(const Duration(seconds: 60));
 
       if (!mounted) return;
 
       if (response.statusCode == 200) {
         setState(() {
           _analysisData = jsonDecode(response.body);
-          _currentStep = 2; 
+          _currentStep = 2;
           _isLoading = false;
         });
+      } else if (attempt < 3) {
+        await Future.delayed(const Duration(seconds: 3));
+        if (mounted) _runSimulation(attempt: attempt + 1);
       } else {
-        setState(() { _errorMessage = 'Simulation failed: ${response.body}'; _isLoading = false; });
+        setState(() { _errorMessage = 'Simulation failed. Please try again.'; _isLoading = false; });
       }
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
-      setState(() { _errorMessage = 'Failed to connect to backend.'; _isLoading = false; });
+      if (attempt < 3) {
+        await Future.delayed(const Duration(seconds: 3));
+        if (mounted) _runSimulation(attempt: attempt + 1);
+      } else {
+        setState(() { _errorMessage = 'Failed to connect to backend.'; _isLoading = false; });
+      }
     }
   }
 
@@ -135,7 +174,22 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
     return Scaffold(
       appBar: CustomAppBar(themeNotifier: widget.themeNotifier, title: 'Energy-Twin: AI Solar Strategy'),
       body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 20),
+                  Text(
+                    _loadingMessage,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.onSurface.withAlpha(150),
+                      fontSize: 14,
+                    ),
+                  ),
+                ],
+              ),
+            )
           : _errorMessage.isNotEmpty
               ? Center(
                   child: Column(

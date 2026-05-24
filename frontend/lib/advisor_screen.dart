@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:frontend/custom_app_bar.dart';
+import 'package:frontend/main.dart' show serverWarmup, kBackendUrl;
 import 'package:http/http.dart' as http;
 
 class AdvisorScreen extends StatefulWidget {
@@ -21,10 +22,7 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
   Map<String, dynamic>? _roiData;
   String _errorMessage = '';
 
-  String get _apiUrl {
-    // 🔥 Updated from local IP to Render URL
-    return 'https://energy-twin-de.onrender.com/simulate_investment';
-  }
+  String _loadingMessage = 'Calculating...';
 
   // 🔥 PRESENTATION MAGIC: Auto-calculates the gas bill based on size and insulation
   void _updateEstimatedBill() {
@@ -36,7 +34,7 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
     _gasBillController.text = (_houseSize * multiplier).toStringAsFixed(0);
   }
 
-  Future<void> _calculateROI() async {
+  Future<void> _calculateROI({int attempt = 1}) async {
     final inputString = _gasBillController.text.trim();
     final double? userBill = double.tryParse(inputString);
     if (userBill == null || userBill <= 0) {
@@ -49,12 +47,23 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
       _isLoading = true;
       _errorMessage = '';
       _roiData = null;
+      _loadingMessage = attempt == 1 ? 'Connecting to server...' : 'Retrying... (attempt $attempt of 3)';
     });
+
+    Future.delayed(const Duration(seconds: 6), () {
+      if (mounted && _isLoading) setState(() => _loadingMessage = 'Server is warming up...');
+    });
+    Future.delayed(const Duration(seconds: 35), () {
+      if (mounted && _isLoading) setState(() => _loadingMessage = 'Almost there...');
+    });
+
+    await serverWarmup;
+    if (!mounted) return;
 
     try {
       final response = await http
           .post(
-            Uri.parse(_apiUrl),
+            Uri.parse('$kBackendUrl/simulate_investment'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'monthly_gas_bill_eur': userBill,
@@ -62,21 +71,34 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
               'insulation_level': _insulationLevel,
             }),
           )
-          .timeout(const Duration(seconds: 60));
+          .timeout(const Duration(seconds: 30));
 
       if (!mounted) return;
 
       if (response.statusCode == 200) {
-        setState(() => _roiData = jsonDecode(response.body));
+        setState(() {
+          _roiData = jsonDecode(response.body);
+          _isLoading = false;
+        });
+      } else if (attempt < 3) {
+        await Future.delayed(const Duration(seconds: 3));
+        if (mounted) _calculateROI(attempt: attempt + 1);
       } else {
-        setState(() => _errorMessage = 'API Error: ${response.statusCode}');
+        setState(() {
+          _errorMessage = 'Server error ${response.statusCode}. Please try again.';
+          _isLoading = false;
+        });
       }
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
-      setState(() => _errorMessage = 'Connection failed. Is Flask running?');
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
+      if (attempt < 3) {
+        await Future.delayed(const Duration(seconds: 3));
+        if (mounted) _calculateROI(attempt: attempt + 1);
+      } else {
+        setState(() {
+          _errorMessage = 'Could not reach server after 3 attempts. Check your connection.';
+          _isLoading = false;
+        });
       }
     }
   }
@@ -211,9 +233,9 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
                       child: CircularProgressIndicator(strokeWidth: 2),
                     )
                   : const Icon(Icons.auto_awesome),
-              label: const Text(
-                'Run Digital Twin Simulation',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+              label: Text(
+                _isLoading ? _loadingMessage : 'Run Digital Twin Simulation',
+                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: theme.colorScheme.primary,
