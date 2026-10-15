@@ -1,0 +1,583 @@
+{
+  "@@locale": "en",
+  "addressExample": "e.g. Musterstraße 12, 10115 Berlin",
+  "addressHint": "Street, number, postcode, city",
+  "addressLabel": "Property address",
+  "adviceBifacial": "Performance transparency: Due to local cloud fluctuations, the system uses bifacial panels to maximize diffuse light capture.",
+  "adviceClimateStable": "Climate audit: Your location shows high solar stability (score: {score}). Winter production risks are evaluated as 'low'.",
+  "@adviceClimateStable": {
+    "placeholders": {
+      "score": {
+        "type": "Object"
+      }
+    }
+  },
+  "adviceFinanceDirect": "Financial strategy: 'Direct purchase' highly recommended. With a {profit} net profit over 20 years, this is your property's best asset.",
+  "@adviceFinanceDirect": {
+    "placeholders": {
+      "profit": {
+        "type": "Object"
+      }
+    }
+  },
+  "adviceFinanceLease": "Financial strategy: 'Solar lease'. To mitigate initial risks and enjoy full maintenance coverage, an OpEx model is more efficient for your profile.",
+  "adviceFinanceLoan": "Financial strategy: 'Financing model'. Your annual savings exceed loan installments, allowing the system to pay for itself.",
+  "adviceIndependenceHigh": "Energy independence: Outstanding! You will achieve {autarky}% independence from the grid, creating a solid hedge against German electricity inflation.",
+  "@adviceIndependenceHigh": {
+    "placeholders": {
+      "autarky": {
+        "type": "Object"
+      }
+    }
+  },
+  "adviceIndependenceLow": "Consumption audit: Due to high household consumption, your autarky is {autarky}%. We recommend shifting heavy appliance usage to peak sun hours (11:00–15:00).",
+  "@adviceIndependenceLow": {
+    "placeholders": {
+      "autarky": {
+        "type": "Object"
+      }
+    }
+  },
+  "adviceInsulation": "Infrastructure upgrade: Your building's energy rating ({rating}) is low. Attic insulation is recommended to boost your solar ROI by an estimated 8%.",
+  "@adviceInsulation": {
+    "placeholders": {
+      "rating": {
+        "type": "Object"
+      }
+    }
+  },
+  "adviceSustainability": "Sustainability: This system offsets {co2} tons of CO₂ annually, equivalent to planting {trees} mature trees. Status: '{grade}'.",
+  "@adviceSustainability": {
+    "placeholders": {
+      "co2": {
+        "type": "Object"
+      },
+      "trees": {
+        "type": "Object"
+      },
+      "grade": {
+        "type": "Object"
+      }
+    }
+  },
+  "adviceTeamMeister": "Execution team: A tier-1 'Solar-Meister' from your region will be assigned to oversee high-load calibration and VDE compliance.",
+  "adviceTeamRegional": "Installation team: Certified regional contractors are prioritized for rapid deployment and local grid synchronization.",
+  "advisorCalculating": "Calculating…",
+  "advisorChip1": "3–4× more efficient than gas",
+  "advisorChip2": "AI off-peak scheduling",
+  "advisorChip3": "Up to 80% less CO₂",
+  "advisorChip4": "€15k install, BAFA subsidy eligible",
+  "advisorHeadline1": "Swap your gas boiler\nfor a",
+  "advisorHeadline2": "smart heat pump.",
+  "advisorIntro": "Replace your gas boiler with a smart heat pump and let EnergyTwin's AI schedule heating around cheap electricity windows. Enter your property details to see your exact savings.",
+  "advisorInvalidBill": "Please enter a valid monthly bill.",
+  "advisorPill": "Powered by live EPEX SPOT market data",
+  "advisorRunningTwin": "Running Digital Twin simulation…",
+  "advisorServerError": "Server error {code}.",
+  "@advisorServerError": {
+    "placeholders": {
+      "code": {
+        "type": "Object"
+      }
+    }
+  },
+  "advisorSimEyebrow": "YOUR SIMULATION",
+  "advisorSimSubtitle": "Three inputs are all the Digital Twin needs to model your heating demand.",
+  "advisorSimTitle": "Tell us about your home.",
+  "advisorStep1Body": "Burns natural gas at ~85% efficiency. German gas costs ~€0.10/kWh. Heating a typical home produces 1,200–2,400 kg of CO₂ every year.",
+  "advisorStep1Title": "Your gas boiler today",
+  "advisorStep2Body": "Moves heat from outdoor air using a small amount of electricity. A COP of 3.5 means 1 kWh in → 3.5 kWh of heat out — far more efficient than any combustion boiler.",
+  "advisorStep2Title": "The heat pump upgrade",
+  "advisorStep3Body": "Our AI monitors German EPEX SPOT prices and pre-heats your home during cheap windows (overnight wind surplus, midday solar dip) — saving an extra 40% on electricity.",
+  "advisorStep3Title": "EnergyTwin AI scheduling",
+  "advisorSubtitle": "ROI simulation · AI off-peak scheduling",
+  "advisorTitle": "Heat Pump Advisor",
+  "advisorUnreachable": "Could not reach server after 3 attempts.",
+  "advisorWhyEyebrow": "WHY IT PAYS OFF",
+  "advisorWhyTitle": "From burning gas to\nsmart, scheduled heat.",
+  "advisorySubtitle": "Personalized recommendations from EnergyTwin's solar analysis engine",
+  "advisoryTitle": "AI strategic advisory",
+  "analysisComplete": "ANALYSIS COMPLETE",
+  "analyzeAnother": "Analyze another property",
+  "analyzedProperty": "ANALYZED PROPERTY",
+  "analyzedRoof": "Analyzed roof",
+  "annualElecSavings": "Annual electricity savings",
+  "annualHeatDemand": "Annual heat demand",
+  "annualHeatDemandHint": "Total thermal energy your home needs for heating — derived from gas consumption × 85% boiler efficiency",
+  "annualSavingsHint": "Yearly reduction in electricity bill",
+  "appTitle": "EnergyTwin | AI Command Center",
+  "asmBoiler": "Gas boiler efficiency",
+  "asmBoilerHint": "Typical old condensing boiler",
+  "asmBoilerValue": "85%",
+  "asmGasCo2": "Gas CO₂ intensity",
+  "asmGasCo2Hint": "Direct natural gas emissions",
+  "asmGasCo2Value": "0.20 kg / kWh",
+  "asmGasPrice": "Gas price",
+  "asmGasPriceHint": "Current German residential tariff",
+  "asmGasPriceValue": "€0.10 / kWh",
+  "asmGridCo2": "Grid CO₂ intensity",
+  "asmGridCo2Hint": "German electricity mix, 2024",
+  "asmGridCo2Value": "0.35 kg / kWh",
+  "asmInstall": "Installation cost",
+  "asmInstallHint": "Net after BAFA subsidy (up to €18,750)",
+  "asmInstallValue": "€15,000",
+  "asmSmartRate": "Smart rate (EnergyTwin)",
+  "asmSmartRateHint": "Off-peak EPEX SPOT average",
+  "asmSmartRateValue": "€0.18 / kWh",
+  "asmStdElec": "Standard electricity",
+  "asmStdElecHint": "Average German household rate",
+  "asmStdElecValue": "€0.30 / kWh",
+  "assumptionsSubtitle": "Transparent methodology — Germany 2024 data.",
+  "assumptionsTitle": "Model assumptions",
+  "backToTracing": "Back to tracing",
+  "bafaEligible": "BAFA-eligible system — qualifies for German state subsidy",
+  "batteryValue": "Battery value",
+  "best": "BEST",
+  "buildingInsulation": "Building insulation",
+  "calculateSavings": "Calculate my savings",
+  "carsHint": "Taken off the road equivalent",
+  "carsValue": "{count} cars",
+  "@carsValue": {
+    "placeholders": {
+      "count": {
+        "type": "Object"
+      }
+    }
+  },
+  "changeAddress": "Change address",
+  "chartSubtitle": "Hover or tap the curve for exact prices",
+  "chartTitle": "Hourly price curve",
+  "cheapest": "Cheapest",
+  "clearCount": "Clear ({count})",
+  "@clearCount": {
+    "placeholders": {
+      "count": {
+        "type": "Object"
+      }
+    }
+  },
+  "co2Eliminated": "CO₂ eliminated",
+  "co2EliminatedHint": "Annual carbon emissions prevented",
+  "co2LessThanGas": "{pct}% less CO₂ than gas",
+  "@co2LessThanGas": {
+    "placeholders": {
+      "pct": {
+        "type": "Object"
+      }
+    }
+  },
+  "co2PerYear": "CO₂ eliminated per year",
+  "co2ReductionVsGas": "CO₂ reduction vs. your gas boiler",
+  "co2SavedPerYear": "CO₂ saved per year",
+  "copAcceptable": "Acceptable",
+  "copExcellent": "Excellent",
+  "copFull": "Coefficient of performance",
+  "copFullHint": "1 kWh electricity → {cop}x kWh of heat. Depends on insulation quality and system design.",
+  "@copFullHint": {
+    "placeholders": {
+      "cop": {
+        "type": "Object"
+      }
+    }
+  },
+  "copGood": "Good",
+  "copHintAverage": "COP ≈ 3.5  ·  typical German installation",
+  "copHintGood": "COP ≈ 4.2  ·  excellent with underfloor heating",
+  "copHintPoor": "COP ≈ 2.8  ·  needs higher water temps",
+  "copLabel": "COP · {rating}",
+  "@copLabel": {
+    "placeholders": {
+      "rating": {
+        "type": "Object"
+      }
+    }
+  },
+  "cornerPlaced": "corner placed",
+  "cornersPlaced": "corners placed",
+  "costGas": "Gas Boiler",
+  "costGasDesc": "Your current system — gas burned at 85% efficiency",
+  "costSmartHp": "EnergyTwin Smart Heat Pump",
+  "costSmartHpDesc": "AI shifts load to off-peak windows — avg €0.18/kWh",
+  "costStdHp": "Standard Heat Pump",
+  "costStdHpDesc": "Off-the-shelf install, billed at flat €0.30/kWh tariff",
+  "costSubtitle": "Same warmth — three very different heating strategies.",
+  "costTitle": "Annual cost comparison",
+  "ctPerKwhValue": "{value} ct/kWh",
+  "@ctPerKwhValue": {
+    "placeholders": {
+      "value": {
+        "type": "Object"
+      }
+    }
+  },
+  "ctValue": "{value} ct",
+  "@ctValue": {
+    "placeholders": {
+      "value": {
+        "type": "Object"
+      }
+    }
+  },
+  "ecoClimateHero": "Climate Hero",
+  "ecoGradeHint": "Sustainability rating for this system",
+  "ecoGradeTitle": "EnergyTwin eco grade",
+  "ecoWarrior": "Eco-Warrior",
+  "elecBillHelper": "Average monthly bill in euros",
+  "elecBillLabel": "Monthly electricity bill",
+  "energyClassHelper": "EU energy label A (best) – G (worst)",
+  "energyClassLabel": "Energy efficiency class",
+  "energyClassSemantics": "Energy class {letter}",
+  "@energyClassSemantics": {
+    "placeholders": {
+      "letter": {
+        "type": "Object"
+      }
+    }
+  },
+  "envTitle": "Environmental impact",
+  "errorServerCode": "Server returned error {code}. Please try again.",
+  "@errorServerCode": {
+    "placeholders": {
+      "code": {
+        "type": "Object"
+      }
+    }
+  },
+  "errorTitle": "Something went wrong",
+  "errorUnreachable": "Could not reach server after 3 attempts. Check your connection.",
+  "fetchSatellite": "Fetch satellite image",
+  "financialTitle": "Financial overview",
+  "fiveCheapestHours": "FIVE CHEAPEST HOURS",
+  "gasBillHelper": "Your average monthly gas or district heating bill",
+  "gasBillLabel": "Monthly heating / gas bill",
+  "gridPriceHelper": "Your current tariff in ct/kWh",
+  "gridPriceLabel": "Grid electricity price",
+  "guideSubtitle": "Retail = wholesale + 15 ct grid/tax + 19% VAT",
+  "guideTitle": "Price guide",
+  "homeAboveAverage": "{pct}% above today's average of {avg} ct",
+  "@homeAboveAverage": {
+    "placeholders": {
+      "pct": {
+        "type": "Object"
+      },
+      "avg": {
+        "type": "Object"
+      }
+    }
+  },
+  "homeBelowAverage": "{pct}% below today's average of {avg} ct",
+  "@homeBelowAverage": {
+    "placeholders": {
+      "pct": {
+        "type": "Object"
+      },
+      "avg": {
+        "type": "Object"
+      }
+    }
+  },
+  "homeCtaBody": "Enter a few details about your home and get a personalised savings estimate in under a minute.",
+  "homeCtaButton": "Start with the Advisor",
+  "homeCtaPrices": "Explore live prices",
+  "homeCtaSavings": "Calculate my savings",
+  "homeCtaTitle": "Ready to see what you could save?",
+  "homeFeatureAdvisorBody": "Find out what replacing your gas boiler really saves, and how AI scheduling around cheap windows adds even more.",
+  "homeFeatureAdvisorTitle": "Heat Pump Advisor",
+  "homeFeaturePricesBody": "Day-ahead prices for today and tomorrow, converted into what you actually pay per kWh — with the cheapest hours highlighted.",
+  "homeFeaturePricesTitle": "Price Forecast",
+  "homeFeatureSolarBody": "Trace your roof on satellite imagery and get AI panel placement, yearly yield and payback estimates in seconds.",
+  "homeFeatureSolarTitle": "Solar AI",
+  "homeFooterSources": "Market data: SMARD.de · EPEX SPOT. Prices shown are forecasts, not tariffs.",
+  "homeFullForecast": "Full forecast for today & tomorrow",
+  "homeHeadline1": "Power your home\nat the",
+  "homeHeadline2": "smartest hour.",
+  "homeHowEyebrow": "HOW IT WORKS",
+  "homeHowTitle": "From market data\nto money saved.",
+  "homeIntro": "EnergyTwin forecasts German electricity prices with machine learning and turns them into real savings for your heat pump, solar roof and everyday appliances.",
+  "homeLiveBadge": "Live forecast · EPEX SPOT DE-LU",
+  "homeLiveUnavailable": "Live prices are unavailable",
+  "homeOpenTool": "Open tool",
+  "homePlatformEyebrow": "PLATFORM",
+  "homePlatformSubtitle": "Every tool runs on the same live market forecast, so your decisions stay consistent from today's laundry to a 20-year solar investment.",
+  "homePlatformTitle": "Three tools. One goal:\na cheaper, greener home.",
+  "homeServerNoResponse": "The forecast server didn't respond.",
+  "homeStatHorizon": "Day-ahead horizon",
+  "homeStatMae": "Forecast MAE per MWh",
+  "homeStatTools": "AI-powered tools",
+  "homeStatVat": "VAT included in prices",
+  "homeStepCollect": "Collect",
+  "homeStepCollectBody": "Generation, load and spot-price data stream in from SMARD and the EPEX SPOT day-ahead auction.",
+  "homeStepOptimize": "Optimize",
+  "homeStepOptimizeBody": "Your heat pump, solar and appliances are planned around the cheapest, greenest windows.",
+  "homeStepPredict": "Predict",
+  "homeStepPredictBody": "A gradient-boosted model forecasts every hour of the coming day, accounting for wind, solar and demand.",
+  "homeTrust1": "XGBoost forecasting",
+  "homeTrust2": "Retail prices incl. VAT",
+  "homeTrust3": "Built for German homes",
+  "homeWakingUp": "Waking up the forecast engine…",
+  "hourlyHeatmap": "HOURLY HEATMAP",
+  "houseSize": "House size",
+  "householdHelper": "Number of people living there",
+  "householdLabel": "Household size",
+  "hpElectricity": "Heat pump electricity",
+  "hpElectricityHint": "Electricity the heat pump consumes to deliver the heat demand above",
+  "independence": "Independence",
+  "insightAfter": " — about {pct}% cheaper than the daily average.",
+  "@insightAfter": {
+    "placeholders": {
+      "pct": {
+        "type": "Object"
+      }
+    }
+  },
+  "insightBefore": "shift your dishwasher, laundry or EV charging to ",
+  "insightPlan": "Plan ahead: ",
+  "insightSmart": "Smart move: ",
+  "insulationAverage": "Average",
+  "insulationAverageDesc": "Standard German construction",
+  "insulationClass": "Insulation class · {level}",
+  "@insulationClass": {
+    "placeholders": {
+      "level": {
+        "type": "Object"
+      }
+    }
+  },
+  "insulationClassHint": "Determines achievable COP and heat distribution type (radiators vs. underfloor heating)",
+  "insulationGood": "Good",
+  "insulationGoodDesc": "Modern, renovated or passive",
+  "insulationPoor": "Poor",
+  "insulationPoorDesc": "Pre-1980, minimal insulation",
+  "investmentPayback": "Investment payback period",
+  "kgValue": "{value} kg",
+  "@kgValue": {
+    "placeholders": {
+      "value": {
+        "type": "Object"
+      }
+    }
+  },
+  "kpiAnnualSavings": "Annual savings",
+  "kpiBestHour": "Best hour",
+  "kpiCo2Avoided": "CO₂ avoided",
+  "kpiCurrentPrice": "Current price",
+  "kpiDailyRange": "Daily range",
+  "kpiDayAverage": "Day average",
+  "kpiNextBestHour": "Next best hour",
+  "kpiOpeningPrice": "Opening price",
+  "kpiPanels": "Panels on your roof",
+  "kpiPayback": "Payback period",
+  "kpiPeakMinusOffPeak": "peak minus off-peak",
+  "kwhPerYear": "kWh / yr",
+  "kwpCapacity": "{kwp} kWp installed capacity",
+  "@kwpCapacity": {
+    "placeholders": {
+      "kwp": {
+        "type": "Object"
+      }
+    }
+  },
+  "language": "Language",
+  "legendCheap": "Cheap < 15 ct",
+  "legendMid": "Mid 15–25 ct",
+  "legendPeak": "Peak > 25 ct",
+  "loadingAlmost": "Almost there…",
+  "loadingConnecting": "Connecting to server…",
+  "loadingPrices": "Loading prices…",
+  "loadingRetry": "Retrying… (attempt {attempt} of 3)",
+  "@loadingRetry": {
+    "placeholders": {
+      "attempt": {
+        "type": "Object"
+      }
+    }
+  },
+  "loadingWarmingUp": "Server is warming up…",
+  "metricsExplain": "Independence: % of electricity self-produced. Sun Score: location quality. Battery Value: estimated benefit of adding a home battery.",
+  "monthlyRelief": "Monthly relief",
+  "monthlyReliefHint": "Average monthly bill reduction",
+  "moreNeeded": "{count} more needed",
+  "@moreNeeded": {
+    "placeholders": {
+      "count": {
+        "type": "Object"
+      }
+    }
+  },
+  "navAdvisor": "Advisor",
+  "navHome": "Home",
+  "navPrices": "Prices",
+  "navSolar": "Solar AI",
+  "netProfit20": "20-year net profit",
+  "netProfit20Hint": "Total earnings after installation cost",
+  "now": "NOW",
+  "panelOverlay": "AI panel placement overlay — {count} panels on {area} m²",
+  "@panelOverlay": {
+    "placeholders": {
+      "count": {
+        "type": "Object"
+      },
+      "area": {
+        "type": "Object"
+      }
+    }
+  },
+  "panelsSuffix": " panels",
+  "paybackHint": "Time to recoup installation investment",
+  "peak": "Peak",
+  "peopleSuffix": "people",
+  "perKwhInclVat": "per kWh incl. VAT",
+  "perMonthShort": "€/mo",
+  "perMonthSuffix": "€ / month",
+  "perYearShort": "/yr",
+  "pricesAiForecast": "XGBoost AI forecast",
+  "pricesEyebrow": "GERMAN ELECTRICITY MARKET",
+  "pricesFetchingToday": "Fetching today's 24-hour price curve",
+  "pricesFetchingTomorrow": "Fetching tomorrow's 24-hour price curve",
+  "pricesHeadline": "What power really costs,\nhour by hour.",
+  "pricesIntro": "Wholesale EPEX SPOT prices converted to your retail price — plus 15 ct grid fees & taxes and 19% VAT.",
+  "pricesLiveData": "Live EPEX SPOT data",
+  "pricesLoadError": "Couldn't load prices",
+  "pricesSubtitle": "EPEX SPOT DE-LU · retail incl. grid fees & VAT",
+  "pricesTitle": "Price Forecast",
+  "propertyDetails": "Property details",
+  "propertyDetailsSubtitle": "Enter your address to fetch a satellite image of your roof.",
+  "propertySubtitle": "The bill auto-estimates as you adjust size and insulation.",
+  "propertyTitle": "Your property",
+  "ready": "Ready",
+  "resultsEyebrow": "YOUR DIGITAL TWIN RESULTS",
+  "resultsTitle": "Here's what you'd save.",
+  "retryConnection": "Retry connection",
+  "rightNow": "RIGHT NOW",
+  "roofArea": "Roof area: {area} m²",
+  "@roofArea": {
+    "placeholders": {
+      "area": {
+        "type": "Object"
+      }
+    }
+  },
+  "runAiAnalysis": "Run AI analysis",
+  "schedulingSubtitle": "The AI shifts your heat pump runtime to the three cheapest daily windows on the German EPEX SPOT market — the same prices shown on your Prices screen.",
+  "schedulingTip": "A well-insulated home retains heat for 3–6 hours, making schedule shifting painless and invisible to occupants.",
+  "schedulingTitle": "How EnergyTwin saves an extra {amount}/yr ({pct}%)",
+  "@schedulingTitle": {
+    "placeholders": {
+      "amount": {
+        "type": "Object"
+      },
+      "pct": {
+        "type": "Object"
+      }
+    }
+  },
+  "selectedProperty": "Selected property",
+  "simulationComplete": "Simulation complete",
+  "sizeDetached": "Detached house",
+  "sizeLarge": "Large property",
+  "sizeMediumApartment": "Medium apartment",
+  "sizeSemiDetached": "Semi-detached",
+  "sizeSmallApartment": "Small apartment",
+  "solarAddressNotFound": "Could not find address.",
+  "solarBackendUnreachable": "Failed to connect to backend.",
+  "solarChip1": "3-step analysis",
+  "solarChip2": "ROI & payback calc",
+  "solarChip3": "CO₂ impact report",
+  "solarConnecting": "Connecting…",
+  "solarFetchingImage": "Fetching satellite image…",
+  "solarFindingRoof": "Finding your roof…",
+  "solarHeadline1": "See what your roof\ncould",
+  "solarHeadline2": "earn you.",
+  "solarIntro": "Enter your property address and energy details. We fetch a satellite image, you trace your roof outline, and our AI calculates your exact solar potential and financial return.",
+  "solarNoPanelsFit": "No solar panels fit inside the traced outline. Trace the full roof surface and try again.",
+  "solarPill": "Solar irradiance via Open-Meteo · Satellite imagery",
+  "solarPotentialTitle": "Your roof's solar potential.",
+  "solarRunningAnalysis": "Running solar analysis…",
+  "solarRunningSim": "Running solar simulation…",
+  "solarServerError": "Server error. Please try again.",
+  "solarSimFailed": "Simulation failed. Please try again.",
+  "solarSubtitle": "Satellite roof analysis · yield & payback",
+  "solarTapAtLeast3": "Tap at least 3 corners on the roof!",
+  "solarTitle": "Solar AI",
+  "sourceEpex": "Source: EPEX SPOT DE-LU via Fraunhofer ISE",
+  "sourceModel": "Source: XGBoost model trained on ENTSO-E data",
+  "specsTitle": "System specifications",
+  "startOver": "Start over",
+  "statBreakEven": "Break-even payback",
+  "statCo2PerYear": "CO₂ eliminated / yr",
+  "statSavedPerYear": "Saved per year",
+  "statTwentyYears": "Total over 20 years",
+  "statusAverage": "Average",
+  "statusCheapHour": "Cheap hour",
+  "statusPeakHour": "Peak hour",
+  "stepEnterDetails": "Enter details",
+  "stepTraceRoof": "Trace roof",
+  "stepViewResults": "View results",
+  "sunScore": "Sun score",
+  "systemMetrics": "System metrics",
+  "tagComputerVision": "Computer vision",
+  "tagSatellite": "Satellite",
+  "tagSmartScheduling": "Smart scheduling",
+  "tapRoofCorners": "Tap corners of your roof",
+  "themeDark": "Dark mode",
+  "themeLight": "Light mode",
+  "today": "Today",
+  "tomorrow": "Tomorrow",
+  "tonsPerYear": "{value} t/yr",
+  "@tonsPerYear": {
+    "placeholders": {
+      "value": {
+        "type": "Object"
+      }
+    }
+  },
+  "traceSubtitle": "Tap the corners of your roof polygon in order — at least 3 points.",
+  "traceTip1": "Tap each corner of the roof surface you want to cover.",
+  "traceTip2": "Go around the outline in order — clockwise or counter-clockwise.",
+  "traceTip3": "Run the AI analysis once the shape looks right.",
+  "traceTitle": "Trace your roof",
+  "treeEquivalent": "Tree equivalent",
+  "treeEquivalentHint": "Annual CO₂ absorption equivalent",
+  "treesApprox": "~{count} trees",
+  "@treesApprox": {
+    "placeholders": {
+      "count": {
+        "type": "Object"
+      }
+    }
+  },
+  "treesHint": "Equivalent annual CO₂ absorption",
+  "treesPerYear": "~{count} trees/yr",
+  "@treesPerYear": {
+    "placeholders": {
+      "count": {
+        "type": "Object"
+      }
+    }
+  },
+  "tryAgain": "Try again",
+  "typicalDay": "A TYPICAL DAY",
+  "undo": "Undo",
+  "unitCtKwh": "ct/kWh",
+  "windowEveningBody": "Evening demand spikes push EPEX to 30–60 ct/kWh. EnergyTwin pauses the heat pump. Stored heat keeps your home comfortable without paying peak rates.",
+  "windowEveningTitle": "Avoid evening peak",
+  "windowMiddayBody": "Germany's solar fleet peaks and prices can hit 0 or even go negative. EnergyTwin maximises heat pump runtime in this window — essentially free heat.",
+  "windowMiddayTitle": "Solar surplus midday",
+  "windowNightBody": "Wind turbines run all night but demand is minimal. EPEX prices fall to 5–15 ct/kWh. EnergyTwin pre-charges your home's thermal mass silently while you sleep.",
+  "windowNightTitle": "Overnight wind valley",
+  "yearsSuffix": " yrs",
+  "yearsValue": "{value} years",
+  "@yearsValue": {
+    "placeholders": {
+      "value": {
+        "type": "Object"
+      }
+    }
+  },
+  "zoneCheap": "Cheap",
+  "zoneCheapDesc": "Run heat pump, charge EV, do laundry",
+  "zoneMid": "Mid",
+  "zoneMidDesc": "Normal household use, monitor closely",
+  "zonePeak": "Peak",
+  "zonePeakDesc": "Avoid big loads, discharge battery"
+}

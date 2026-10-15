@@ -168,9 +168,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
           const Spacer(),
+          const LanguageToggle(),
+          const SizedBox(width: 10),
           GlassIconButton(
             icon: p.isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-            tooltip: p.isDark ? 'Light mode' : 'Dark mode',
+            tooltip: p.isDark ? context.l10n.themeLight : context.l10n.themeDark,
             onTap: () => widget.themeNotifier.value = p.isDark ? ThemeMode.light : ThemeMode.dark,
           ),
         ],
@@ -222,14 +224,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           controller: _intro,
           start: 0.05,
           end: 0.45,
-          child: LiveBadge(pulse: _pulse, label: 'Live forecast · EPEX SPOT DE-LU'),
+          child: LiveBadge(pulse: _pulse, label: context.l10n.homeLiveBadge),
         ),
         const SizedBox(height: 24),
         Reveal(
           controller: _intro,
           start: 0.1,
           end: 0.5,
-          child: Text('Power your home\nat the', style: headlineStyle),
+          child: Text(context.l10n.homeHeadline1, style: headlineStyle),
         ),
         Reveal(
           controller: _intro,
@@ -251,7 +253,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               },
               child: child,
             ),
-            child: Text('smartest hour.', style: headlineStyle),
+            child: Text(context.l10n.homeHeadline2, style: headlineStyle),
           ),
         ),
         const SizedBox(height: 24),
@@ -262,8 +264,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 540),
             child: Text(
-              'EnergyTwin forecasts German electricity prices with machine learning and turns them into '
-              'real savings for your heat pump, solar roof and everyday appliances.',
+              context.l10n.homeIntro,
               style: GoogleFonts.inter(fontSize: wide ? 18 : 16, height: 1.6, color: p.muted),
             ),
           ),
@@ -277,8 +278,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             spacing: 14,
             runSpacing: 14,
             children: [
-              PrimaryButton(label: 'Explore live prices', icon: Icons.arrow_forward_rounded, onTap: () => widget.onNavigate(1)),
-              SecondaryButton(label: 'Calculate my savings', icon: Icons.savings_outlined, onTap: () => widget.onNavigate(2)),
+              PrimaryButton(label: context.l10n.homeCtaPrices, icon: Icons.arrow_forward_rounded, onTap: () => widget.onNavigate(1)),
+              SecondaryButton(label: context.l10n.homeCtaSavings, icon: Icons.savings_outlined, onTap: () => widget.onNavigate(2)),
             ],
           ),
         ),
@@ -291,7 +292,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             spacing: 22,
             runSpacing: 10,
             children: [
-              for (final t in const ['XGBoost forecasting', 'Retail prices incl. VAT', 'Built for German homes'])
+              for (final t in [context.l10n.homeTrust1, context.l10n.homeTrust2, context.l10n.homeTrust3])
                 Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
@@ -313,10 +314,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // ---------------------------------------------------------------- stats
   Widget _buildStats(AppPalette p, bool wide) {
     final stats = [
-      const _Stat(value: 17.56, decimals: 2, prefix: '€', suffix: '', label: 'Forecast MAE per MWh'),
-      const _Stat(value: 24, decimals: 0, prefix: '', suffix: 'h', label: 'Day-ahead horizon'),
-      const _Stat(value: 3, decimals: 0, prefix: '', suffix: '', label: 'AI-powered tools'),
-      const _Stat(value: 19, decimals: 0, prefix: '', suffix: '%', label: 'VAT included in prices'),
+      _Stat(value: 17.56, decimals: 2, prefix: '', suffix: '', label: context.l10n.homeStatMae, currency: true),
+      _Stat(value: 24, decimals: 0, prefix: '', suffix: 'h', label: context.l10n.homeStatHorizon),
+      _Stat(value: 3, decimals: 0, prefix: '', suffix: '', label: context.l10n.homeStatTools),
+      _Stat(value: 19, decimals: 0, prefix: '', suffix: '%', label: context.l10n.homeStatVat),
     ];
     return Glass(
       radius: 24,
@@ -351,26 +352,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _Feature(
         icon: Icons.insights_rounded,
         colors: const [AppColors.sky, AppColors.indigo],
-        title: 'Price Forecast',
-        body:
-            'Day-ahead prices for today and tomorrow, converted into what you actually pay per kWh — with the cheapest hours highlighted.',
+        title: context.l10n.homeFeaturePricesTitle,
+        body: context.l10n.homeFeaturePricesBody,
         tags: const ['EPEX SPOT', 'XGBoost'],
         tab: 1,
       ),
       _Feature(
         icon: Icons.heat_pump_rounded,
         colors: const [AppColors.emerald, AppColors.teal],
-        title: 'Heat Pump Advisor',
-        body: 'Find out what replacing your gas boiler really saves, and how AI scheduling around cheap windows adds even more.',
-        tags: const ['ROI', 'Smart scheduling'],
+        title: context.l10n.homeFeatureAdvisorTitle,
+        body: context.l10n.homeFeatureAdvisorBody,
+        tags: ['ROI', context.l10n.tagSmartScheduling],
         tab: 2,
       ),
       _Feature(
         icon: Icons.solar_power_rounded,
         colors: const [AppColors.amber, AppColors.orange],
-        title: 'Solar AI',
-        body: 'Trace your roof on satellite imagery and get AI panel placement, yearly yield and payback estimates in seconds.',
-        tags: const ['Satellite', 'Computer vision'],
+        title: context.l10n.homeFeatureSolarTitle,
+        body: context.l10n.homeFeatureSolarBody,
+        tags: [context.l10n.tagSatellite, context.l10n.tagComputerVision],
         tab: 3,
       ),
     ];
@@ -382,10 +382,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           controller: _scroll,
           child: SectionHeader(
             wide: wide,
-            eyebrow: 'PLATFORM',
-            title: 'Three tools. One goal:\na cheaper, greener home.',
-            subtitle:
-                'Every tool runs on the same live market forecast, so your decisions stay consistent from today\'s laundry to a 20-year solar investment.',
+            eyebrow: context.l10n.homePlatformEyebrow,
+            title: context.l10n.homePlatformTitle,
+            subtitle: context.l10n.homePlatformSubtitle,
           ),
         ),
         const SizedBox(height: 48),
@@ -417,18 +416,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // ---------------------------------------------------------------- how it works
   Widget _buildHowItWorks(AppPalette p, bool wide) {
-    const steps = [
-      (
-        Icons.cloud_download_rounded,
-        'Collect',
-        'Generation, load and spot-price data stream in from SMARD and the EPEX SPOT day-ahead auction.',
-      ),
-      (
-        Icons.auto_graph_rounded,
-        'Predict',
-        'A gradient-boosted model forecasts every hour of the coming day, accounting for wind, solar and demand.',
-      ),
-      (Icons.tune_rounded, 'Optimize', 'Your heat pump, solar and appliances are planned around the cheapest, greenest windows.'),
+    final l = context.l10n;
+    final steps = [
+      (Icons.cloud_download_rounded, l.homeStepCollect, l.homeStepCollectBody),
+      (Icons.auto_graph_rounded, l.homeStepPredict, l.homeStepPredictBody),
+      (Icons.tune_rounded, l.homeStepOptimize, l.homeStepOptimizeBody),
     ];
 
     return Column(
@@ -436,7 +428,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       children: [
         ScrollReveal(
           controller: _scroll,
-          child: SectionHeader(wide: wide, eyebrow: 'HOW IT WORKS', title: 'From market data\nto money saved.'),
+          child: SectionHeader(wide: wide, eyebrow: l.homeHowEyebrow, title: l.homeHowTitle),
         ),
         const SizedBox(height: 48),
         LayoutBuilder(
@@ -507,7 +499,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          'Ready to see what you could save?',
+                          context.l10n.homeCtaTitle,
                           style: GoogleFonts.plusJakartaSans(
                             fontSize: wide ? 36 : 26,
                             fontWeight: FontWeight.w800,
@@ -518,7 +510,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Enter a few details about your home and get a personalised savings estimate in under a minute.',
+                          context.l10n.homeCtaBody,
                           style: GoogleFonts.inter(fontSize: 16, height: 1.55, color: Colors.white.withValues(alpha: 0.8)),
                         ),
                       ],
@@ -538,7 +530,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                'Start with the Advisor',
+                                context.l10n.homeCtaButton,
                                 style: GoogleFonts.inter(fontSize: 15, fontWeight: FontWeight.w700, color: const Color(0xFF065F46)),
                               ),
                               const SizedBox(width: 10),
@@ -572,7 +564,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           runSpacing: 8,
           children: [
             Text('© ${DateTime.now().year} EnergyTwin DE', style: style.copyWith(fontWeight: FontWeight.w600)),
-            Text('Market data: SMARD.de · EPEX SPOT. Prices shown are forecasts, not tariffs.', style: style),
+            Text(context.l10n.homeFooterSources, style: style),
           ],
         ),
       ],
@@ -621,8 +613,8 @@ class _LivePriceCard extends StatelessWidget {
           child: prices != null
               ? _buildLoaded(context, prices!)
               : error
-              ? _buildError()
-              : _buildLoading(),
+              ? _buildError(context)
+              : _buildLoading(context),
         ),
       ),
     );
@@ -638,10 +630,10 @@ class _LivePriceCard extends StatelessWidget {
     final diffPct = (now - avg) / avg * 100;
 
     final (statusLabel, statusColor, statusIcon) = diffPct <= -8
-        ? ('Cheap hour', AppColors.emerald, Icons.eco_rounded)
+        ? (context.l10n.statusCheapHour, AppColors.emerald, Icons.eco_rounded)
         : diffPct >= 8
-        ? ('Peak hour', AppColors.rose, Icons.warning_amber_rounded)
-        : ('Average', AppColors.amber, Icons.horizontal_rule_rounded);
+        ? (context.l10n.statusPeakHour, AppColors.rose, Icons.warning_amber_rounded)
+        : (context.l10n.statusAverage, AppColors.amber, Icons.horizontal_rule_rounded);
 
     String hh(int h) => '${h.toString().padLeft(2, '0')}:00';
 
@@ -653,7 +645,7 @@ class _LivePriceCard extends StatelessWidget {
         Row(
           children: [
             Text(
-              'RIGHT NOW',
+              context.l10n.rightNow,
               style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.5, color: p.muted),
             ),
             const SizedBox(width: 8),
@@ -669,6 +661,7 @@ class _LivePriceCard extends StatelessWidget {
             CountUp(
               value: now,
               decimals: 1,
+              thousands: true,
               style: GoogleFonts.plusJakartaSans(fontSize: 56, fontWeight: FontWeight.w800, height: 1, color: p.text, letterSpacing: -2),
             ),
             const SizedBox(width: 8),
@@ -691,7 +684,9 @@ class _LivePriceCard extends StatelessWidget {
             ),
             const SizedBox(width: 6),
             Text(
-              '${diffPct.abs().toStringAsFixed(0)}% ${diffPct >= 0 ? 'above' : 'below'} today\'s average of ${avg.toStringAsFixed(1)} ct',
+              diffPct >= 0
+                  ? context.l10n.homeAboveAverage(context.fmt(diffPct.abs()), context.fmt(avg, 1))
+                  : context.l10n.homeBelowAverage(context.fmt(diffPct.abs()), context.fmt(avg, 1)),
               style: GoogleFonts.inter(fontSize: 13, color: p.muted),
             ),
           ],
@@ -734,9 +729,9 @@ class _LivePriceCard extends StatelessWidget {
               child: _MiniTile(
                 palette: p,
                 color: AppColors.emerald,
-                label: 'Cheapest',
+                label: context.l10n.cheapest,
                 value: hh(minI),
-                sub: '${prices[minI].toStringAsFixed(1)} ct',
+                sub: context.l10n.ctValue(context.fmt(prices[minI], 1)),
               ),
             ),
             const SizedBox(width: 12),
@@ -744,20 +739,20 @@ class _LivePriceCard extends StatelessWidget {
               child: _MiniTile(
                 palette: p,
                 color: AppColors.rose,
-                label: 'Peak',
+                label: context.l10n.peak,
                 value: hh(maxI),
-                sub: '${prices[maxI].toStringAsFixed(1)} ct',
+                sub: context.l10n.ctValue(context.fmt(prices[maxI], 1)),
               ),
             ),
           ],
         ),
         const SizedBox(height: 18),
-        TextLink(label: 'Full forecast for today & tomorrow', color: AppColors.emerald, onTap: onOpen),
+        TextLink(label: context.l10n.homeFullForecast, color: AppColors.emerald, onTap: onOpen),
       ],
     );
   }
 
-  Widget _buildLoading() {
+  Widget _buildLoading(BuildContext context) {
     final p = palette;
     return Column(
       key: const ValueKey('loading'),
@@ -767,7 +762,7 @@ class _LivePriceCard extends StatelessWidget {
         Row(
           children: [
             Text(
-              'RIGHT NOW',
+              context.l10n.rightNow,
               style: GoogleFonts.jetBrainsMono(fontSize: 11, fontWeight: FontWeight.w700, letterSpacing: 1.5, color: p.muted),
             ),
             const Spacer(),
@@ -793,12 +788,12 @@ class _LivePriceCard extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 18),
-        Text('Waking up the forecast engine…', style: GoogleFonts.inter(fontSize: 13, color: p.muted)),
+        Text(context.l10n.homeWakingUp, style: GoogleFonts.inter(fontSize: 13, color: p.muted)),
       ],
     );
   }
 
-  Widget _buildError() {
+  Widget _buildError(BuildContext context) {
     final p = palette;
     return SizedBox(
       key: const ValueKey('error'),
@@ -809,13 +804,13 @@ class _LivePriceCard extends StatelessWidget {
           Icon(Icons.cloud_off_rounded, size: 40, color: p.muted),
           const SizedBox(height: 14),
           Text(
-            'Live prices are unavailable',
+            context.l10n.homeLiveUnavailable,
             style: GoogleFonts.inter(fontSize: 16, fontWeight: FontWeight.w700, color: p.text),
           ),
           const SizedBox(height: 6),
-          Text('The forecast server didn\'t respond.', style: GoogleFonts.inter(fontSize: 13, color: p.muted)),
+          Text(context.l10n.homeServerNoResponse, style: GoogleFonts.inter(fontSize: 13, color: p.muted)),
           const SizedBox(height: 18),
-          SecondaryButton(label: 'Try again', icon: Icons.refresh_rounded, onTap: onRetry),
+          SecondaryButton(label: context.l10n.tryAgain, icon: Icons.refresh_rounded, onTap: onRetry),
         ],
       ),
     );
@@ -955,7 +950,8 @@ class _SparklinePainter extends CustomPainter {
 // Sections & tiles
 // ======================================================================
 class _Stat {
-  const _Stat({required this.value, required this.decimals, required this.prefix, required this.suffix, required this.label});
+  const _Stat({required this.value, required this.decimals, required this.prefix, required this.suffix, required this.label, this.currency = false});
+  final bool currency;
   final double value;
   final int decimals;
   final String prefix;
@@ -978,6 +974,7 @@ class _StatTile extends StatelessWidget {
           decimals: stat.decimals,
           prefix: stat.prefix,
           suffix: stat.suffix,
+          currency: stat.currency,
           duration: const Duration(milliseconds: 2000),
           style: GoogleFonts.plusJakartaSans(fontSize: wide ? 34 : 26, fontWeight: FontWeight.w800, color: palette.text, letterSpacing: -1),
         ),
@@ -1110,7 +1107,7 @@ class _FeatureCardState extends State<_FeatureCard> {
                     Row(
                       children: [
                         Text(
-                          'Open tool',
+                          context.l10n.homeOpenTool,
                           style: GoogleFonts.inter(fontSize: 14, fontWeight: FontWeight.w700, color: p.text),
                         ),
                         AnimatedPadding(

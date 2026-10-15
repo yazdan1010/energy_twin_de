@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/advisor_screen.dart';
 import 'package:frontend/home_screen.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 import 'package:frontend/price_dashboard_screen.dart';
 import 'package:frontend/solar_dashboard_screen.dart';
 import 'package:frontend/ui/glass_nav_bar.dart';
 import 'package:frontend/ui/kit.dart';
+import 'package:frontend/ui/locale_controller.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 
@@ -19,7 +21,9 @@ final Future<void> serverWarmup = http
     .catchError((_) {});
 
 final ValueNotifier<ThemeMode> themeNotifier = ValueNotifier(ThemeMode.dark);
-void main() {
+Future<void> main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await localeController.load();
   runApp(const EnergyTwinApp());
 }
 
@@ -28,12 +32,16 @@ class EnergyTwinApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ValueListenableBuilder<ThemeMode>(
-      valueListenable: themeNotifier,
-      builder: (_, ThemeMode currentMode, _) {
+    return ListenableBuilder(
+      listenable: Listenable.merge([themeNotifier, localeController]),
+      builder: (context, _) {
+        final currentMode = themeNotifier.value;
         return MaterialApp(
-          title: 'EnergyTwin Pro',
+          onGenerateTitle: (context) => context.l10n.appTitle,
           debugShowCheckedModeBanner: false,
+          locale: localeController.value,
+          supportedLocales: LocaleController.supported,
+          localizationsDelegates: AppLocalizations.localizationsDelegates,
 
           // Now it listens to our manual toggle!
           themeMode: currentMode,
@@ -112,29 +120,29 @@ class _AppShellState extends State<AppShell> {
       bottomNavigationBar: GlassNavBar(
         index: _currentIndex,
         onChanged: _goTo,
-        items: const [
+        items: [
           GlassNavItem(
             icon: Icons.home_outlined,
             selectedIcon: Icons.home_rounded,
-            label: 'Home',
+            label: context.l10n.navHome,
             colors: [AppColors.emerald, AppColors.sky],
           ),
           GlassNavItem(
             icon: Icons.insights_outlined,
             selectedIcon: Icons.insights_rounded,
-            label: 'Prices',
+            label: context.l10n.navPrices,
             colors: [AppColors.sky, AppColors.indigo],
           ),
           GlassNavItem(
             icon: Icons.heat_pump_outlined,
             selectedIcon: Icons.heat_pump_rounded,
-            label: 'Advisor',
+            label: context.l10n.navAdvisor,
             colors: [AppColors.emerald, AppColors.teal],
           ),
           GlassNavItem(
             icon: Icons.solar_power_outlined,
             selectedIcon: Icons.solar_power_rounded,
-            label: 'Solar AI',
+            label: context.l10n.navSolar,
             colors: [AppColors.amber, AppColors.orange],
           ),
         ],

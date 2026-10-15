@@ -380,7 +380,8 @@ def simulate_solar():
                 os.remove(tmp_path)
 
         if num_panels == 0 and px_points:
-            return jsonify({"error": "No solar panels fit inside the traced outline. Trace the full roof surface and try again."}), 422
+            return jsonify({"error": "No solar panels fit inside the traced outline. Trace the full roof surface and try again.",
+                            "error_code": "no_panels_fit"}), 422
 
         # ABSOLUTE SAFETY NET (legacy clients only): force a realistic success state
         if num_panels == 0:

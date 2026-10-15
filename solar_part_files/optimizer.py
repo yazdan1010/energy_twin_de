@@ -60,3 +60,44 @@ def generate_architect_report(analysis, confidence=95.0, energy_rating='D'):
     report.append(f"Sustainability: This system offsets {co2_val} Tons of CO2 annually, equivalent to planting {trees} mature trees in the Bonn region. Status: '{env.get('eco_grade')}'.")
 
     return report
+
+def generate_advice_items(analysis, energy_rating='D'):
+    """
+    Language-neutral version of generate_architect_report: each tip is an id plus the
+    raw numbers it needs, so clients can render it in the visitor's language.
+    Mirrors the decision logic above one-to-one.
+    """
+    items = []
+    financials = analysis.get('financials', {})
+    payback = financials.get('payback', 15)
+    if payback < 10:
+        items.append({"id": "finance_direct", "params": {"profit": financials.get('twenty_year_profit', 0)}})
+    elif payback < 13:
+        items.append({"id": "finance_loan", "params": {}})
+    else:
+        items.append({"id": "finance_lease", "params": {}})
+
+    strategy = analysis.get('strategy', {})
+    autarky = strategy.get('autarky_rate', 0)
+    if autarky > 80:
+        items.append({"id": "independence_high", "params": {"autarky": autarky}})
+    else:
+        items.append({"id": "independence_low", "params": {"autarky": autarky}})
+
+    location_score = strategy.get('location_score', 75)
+    if energy_rating in ['E', 'F', 'G']:
+        items.append({"id": "insulation_upgrade", "params": {"rating": energy_rating}})
+    if location_score > 85:
+        items.append({"id": "climate_stable", "params": {"score": location_score}})
+    else:
+        items.append({"id": "bifacial", "params": {}})
+
+    if analysis.get('capacity_kwp', 0) > 10.0:
+        items.append({"id": "team_meister", "params": {}})
+    else:
+        items.append({"id": "team_nrw", "params": {}})
+
+    env = analysis.get('environment', {})
+    items.append({"id": "sustainability", "params": {
+        "co2": env.get('co2_saved', 0), "trees": env.get('tree_count', 0), "grade": env.get('eco_grade')}})
+    return items

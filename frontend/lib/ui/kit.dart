@@ -4,10 +4,31 @@ import 'dart:math' as math;
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:frontend/l10n/app_localizations.dart';
+import 'package:frontend/ui/locale_controller.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 /// Bottom padding every scrollable screen needs so content clears the floating nav bar.
 const double kNavClearance = 110;
+
+/// Localized strings and locale-aware number formatting.
+extension L10nContext on BuildContext {
+  AppLocalizations get l10n => AppLocalizations.of(this);
+  String get localeTag => Localizations.localeOf(this).toLanguageTag();
+
+  /// Decimal number in the current locale, e.g. 1.234,5 (de) / 1,234.5 (en).
+  String fmt(num v, [int decimals = 0]) => NumberFormat.decimalPatternDigits(locale: localeTag, decimalDigits: decimals).format(v);
+
+  /// Euro amount in the current locale, e.g. 1.686 € (de) / €1,686 (en).
+  String eur(num v, [int decimals = 0]) => NumberFormat.currency(locale: localeTag, symbol: '€', decimalDigits: decimals).format(v);
+
+  /// Long date in the current locale from an ISO yyyy-mm-dd string; falls back to the input.
+  String date(String iso) {
+    final d = DateTime.tryParse(iso);
+    return d == null ? iso : DateFormat.yMMMMd(localeTag).format(d);
+  }
+}
 
 // ======================================================================
 // Tokens
@@ -705,8 +726,82 @@ class ThemeToggle extends StatelessWidget {
     final isDark = AppPalette.of(context).isDark;
     return GlassIconButton(
       icon: isDark ? Icons.light_mode_rounded : Icons.dark_mode_rounded,
-      tooltip: isDark ? 'Light mode' : 'Dark mode',
+      tooltip: isDark ? context.l10n.themeLight : context.l10n.themeDark,
       onTap: () => themeNotifier.value = isDark ? ThemeMode.light : ThemeMode.dark,
+    );
+  }
+}
+
+/// Compact DE / EN switch bound to [localeController].
+class LanguageToggle extends StatelessWidget {
+  const LanguageToggle({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return ValueListenableBuilder<Locale>(
+      valueListenable: localeController,
+      builder: (context, current, _) => Tooltip(
+        message: context.l10n.language,
+        child: Container(
+          height: 42,
+          padding: const EdgeInsets.all(3),
+          decoration: BoxDecoration(
+            color: p.glass,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: p.border),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final l in LocaleController.supported)
+                _LangChip(
+                  code: l.languageCode.toUpperCase(),
+                  label: l.languageCode == 'de' ? 'Deutsch' : 'English',
+                  selected: current.languageCode == l.languageCode,
+                  onTap: () => localeController.set(l),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LangChip extends StatelessWidget {
+  const _LangChip({required this.code, required this.label, required this.selected, required this.onTap});
+  final String code;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = AppPalette.of(context);
+    return Semantics(
+      button: true,
+      selected: selected,
+      label: label,
+      excludeSemantics: true,
+      onTap: onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 250),
+            curve: Curves.easeOutCubic,
+            width: 38,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(9),
+              gradient: selected ? const LinearGradient(colors: [AppColors.emerald, AppColors.sky]) : null,
+            ),
+            child: Text(code, style: AppType.mono(11.5, selected ? Colors.white : p.muted, weight: FontWeight.w800)),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -936,6 +1031,7 @@ class CountUp extends StatelessWidget {
     this.suffix = '',
     this.duration = const Duration(milliseconds: 1400),
     this.thousands = false,
+    this.currency = false,
   });
   final double value;
   final int decimals;
@@ -944,31 +1040,28 @@ class CountUp extends StatelessWidget {
   final String suffix;
   final Duration duration;
 
-  /// Group digits with thin separators (e.g. 12,450).
+  /// Group digits per locale (12.450 in German, 12,450 in English).
   final bool thousands;
 
-  static String format(double v, int decimals, {bool thousands = false}) {
-    final s = v.toStringAsFixed(decimals);
-    if (!thousands) return s;
-    final neg = s.startsWith('-');
-    final parts = (neg ? s.substring(1) : s).split('.');
-    final digits = parts[0];
-    final buf = StringBuffer();
-    for (var i = 0; i < digits.length; i++) {
-      if (i > 0 && (digits.length - i) % 3 == 0) buf.write(',');
-      buf.write(digits[i]);
-    }
-    return '${neg ? '-' : ''}$buf${parts.length > 1 ? '.${parts[1]}' : ''}';
-  }
+  /// Format as a euro amount in the current locale; [prefix] is ignored.
+  final bool currency;
 
   @override
   Widget build(BuildContext context) {
+    final tag = context.localeTag;
+    final NumberFormat f;
+    if (currency) {
+      f = NumberFormat.currency(locale: tag, symbol: '€', decimalDigits: decimals);
+    } else {
+      f = NumberFormat.decimalPatternDigits(locale: tag, decimalDigits: decimals);
+      if (!thousands) f.turnOffGrouping();
+    }
     return TweenAnimationBuilder<double>(
       tween: Tween(begin: 0, end: value),
       duration: duration,
       curve: Curves.easeOutExpo,
       builder: (_, v, _) => Text(
-        '$prefix${format(v, decimals, thousands: thousands)}$suffix',
+        '${currency ? '' : prefix}${f.format(v)}$suffix',
         maxLines: 1,
         overflow: TextOverflow.visible,
         style: style.copyWith(fontFeatures: const [FontFeature.tabularFigures()]),
@@ -992,6 +1085,7 @@ class KpiTile extends StatefulWidget {
     this.sub,
     this.valueColor,
     this.thousands = false,
+    this.currency = false,
   }) : assert(number != null || text != null);
   final IconData icon;
   final List<Color> colors;
@@ -1006,6 +1100,7 @@ class KpiTile extends StatefulWidget {
   final String? sub;
   final Color? valueColor;
   final bool thousands;
+  final bool currency;
 
   @override
   State<KpiTile> createState() => _KpiTileState();
@@ -1053,6 +1148,7 @@ class _KpiTileState extends State<KpiTile> {
                         prefix: widget.prefix,
                         suffix: widget.suffix,
                         thousands: widget.thousands,
+                        currency: widget.currency,
                         style: style,
                       )
                     : Text(widget.text!, style: style),
@@ -1447,14 +1543,14 @@ class ErrorPanel extends StatelessWidget {
     super.key,
     required this.message,
     required this.onAction,
-    this.title = 'Something went wrong',
-    this.actionLabel = 'Try again',
+    this.title,
+    this.actionLabel,
     this.actionIcon = Icons.refresh_rounded,
   });
-  final String title;
+  final String? title;
   final String message;
   final VoidCallback onAction;
-  final String actionLabel;
+  final String? actionLabel;
   final IconData actionIcon;
 
   @override
@@ -1469,11 +1565,11 @@ class ErrorPanel extends StatelessWidget {
         children: [
           const IconTile(icon: Icons.cloud_off_rounded, colors: [AppColors.rose], size: 56, soft: true),
           const SizedBox(height: 18),
-          Text(title, textAlign: TextAlign.center, style: AppType.display(18, p.text)),
+          Text(title ?? context.l10n.errorTitle, textAlign: TextAlign.center, style: AppType.display(18, p.text)),
           const SizedBox(height: 6),
           Text(message, textAlign: TextAlign.center, style: AppType.body(14, p.muted)),
           const SizedBox(height: 22),
-          SecondaryButton(label: actionLabel, icon: actionIcon, onTap: onAction, accent: AppColors.rose),
+          SecondaryButton(label: actionLabel ?? context.l10n.tryAgain, icon: actionIcon, onTap: onAction, accent: AppColors.rose),
         ],
       ),
     );

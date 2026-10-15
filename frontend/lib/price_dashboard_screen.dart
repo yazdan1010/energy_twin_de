@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:frontend/custom_app_bar.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 import 'package:frontend/main.dart' show serverWarmup, kBackendUrl;
 import 'package:frontend/ui/kit.dart';
 import 'package:http/http.dart' as http;
@@ -19,9 +20,10 @@ class PriceDashboardScreen extends StatefulWidget {
 class _PriceDashboardScreenState extends State<PriceDashboardScreen> with SingleTickerProviderStateMixin {
   List<double> _hourlyPrices = [];
   bool _isLoading = true;
-  String _errorMessage = '';
+  // Resolved at build time so a language switch mid-load updates the text.
+  String Function(AppLocalizations)? _error;
   String _targetDate = '';
-  String _loadingMessage = 'Loading prices...';
+  String Function(AppLocalizations) _loadingMessage = (l) => l.loadingPrices;
   String _dataSource = '';
 
   String _selectedDay = 'today';
@@ -62,7 +64,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
         _targetDate = _cachedTodayDate!;
         _dataSource = _cachedTodaySource ?? '';
         _isLoading = false;
-        _errorMessage = '';
+        _error = null;
       });
       return;
     }
@@ -72,22 +74,22 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
         _targetDate = _cachedTomorrowDate!;
         _dataSource = _cachedTomorrowSource ?? '';
         _isLoading = false;
-        _errorMessage = '';
+        _error = null;
       });
       return;
     }
 
     setState(() {
       _isLoading = true;
-      _errorMessage = '';
-      _loadingMessage = attempt == 1 ? 'Connecting to server...' : 'Retrying... (attempt $attempt of 3)';
+      _error = null;
+      _loadingMessage = attempt == 1 ? (l) => l.loadingConnecting : (l) => l.loadingRetry(attempt);
     });
 
     Future.delayed(const Duration(seconds: 6), () {
-      if (mounted && _isLoading) setState(() => _loadingMessage = 'Server is warming up...');
+      if (mounted && _isLoading) setState(() => _loadingMessage = (l) => l.loadingWarmingUp);
     });
     Future.delayed(const Duration(seconds: 35), () {
-      if (mounted && _isLoading) setState(() => _loadingMessage = 'Almost there...');
+      if (mounted && _isLoading) setState(() => _loadingMessage = (l) => l.loadingAlmost);
     });
 
     await serverWarmup;
@@ -130,7 +132,8 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
         if (mounted) _fetchLiveForecast(attempt: attempt + 1);
       } else {
         setState(() {
-          _errorMessage = 'Server returned error ${response.statusCode}. Please try again.';
+          final code = response.statusCode;
+          _error = (l) => l.errorServerCode(code);
           _isLoading = false;
         });
       }
@@ -141,7 +144,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
         if (mounted) _fetchLiveForecast(attempt: attempt + 1);
       } else {
         setState(() {
-          _errorMessage = 'Could not reach server after 3 attempts. Check your connection.';
+          _error = (l) => l.errorUnreachable;
           _isLoading = false;
         });
       }
@@ -159,8 +162,8 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
       extendBodyBehindAppBar: true,
       appBar: CustomAppBar(
         themeNotifier: widget.themeNotifier,
-        title: 'Price Forecast',
-        subtitle: 'EPEX SPOT DE-LU · retail incl. grid fees & VAT',
+        title: context.l10n.pricesTitle,
+        subtitle: context.l10n.pricesSubtitle,
         icon: Icons.insights_rounded,
         colors: _accent,
       ),
@@ -188,7 +191,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
                         ),
                         child: _isLoading
                             ? KeyedSubtree(key: const ValueKey('loading'), child: _buildLoading(p, wide))
-                            : _errorMessage.isNotEmpty
+                            : _error != null
                                 ? KeyedSubtree(key: const ValueKey('error'), child: _buildError())
                                 : KeyedSubtree(key: ValueKey('data-$_selectedDay-$_targetDate'), child: _buildDashboard(p, wide)),
                       ),
@@ -206,14 +209,15 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
   // ---------------------------------------------------------------- intro
   Widget _buildIntro(AppPalette p, bool wide) {
     final isLive = _dataSource.contains('EPEX');
-    final ready = !_isLoading && _errorMessage.isEmpty;
+    final l = context.l10n;
+    final ready = !_isLoading && _error == null;
     final copy = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         SectionHeader(
-          eyebrow: 'GERMAN ELECTRICITY MARKET',
-          title: 'What power really costs,\nhour by hour.',
-          subtitle: 'Wholesale EPEX SPOT prices converted to your retail price — plus 15 ct grid fees & taxes and 19% VAT.',
+          eyebrow: l.pricesEyebrow,
+          title: l.pricesHeadline,
+          subtitle: l.pricesIntro,
           wide: wide,
           accent: AppColors.sky,
           compact: true,
@@ -229,7 +233,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
             children: [
               LiveBadge(
                 pulse: _pulse,
-                label: isLive ? 'Live EPEX SPOT data' : 'XGBoost AI forecast',
+                label: isLive ? l.pricesLiveData : l.pricesAiForecast,
                 color: isLive ? AppColors.emerald : AppColors.amber,
               ),
               if (_targetDate.isNotEmpty)
@@ -245,7 +249,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
                     children: [
                       Icon(Icons.calendar_today_rounded, size: 13, color: p.muted),
                       const SizedBox(width: 7),
-                      Text(_targetDate, style: AppType.mono(12, p.muted)),
+                      Text(context.date(_targetDate), style: AppType.mono(12, p.muted)),
                     ],
                   ),
                 ),
@@ -255,7 +259,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
       ],
     );
     final toggle = SegmentedToggle<String>(
-      options: const [('today', 'Today'), ('tomorrow', 'Tomorrow')],
+      options: [('today', l.today), ('tomorrow', l.tomorrow)],
       value: _selectedDay,
       colors: _accent,
       onChanged: (v) {
@@ -276,8 +280,8 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         LoadingPanel(
-          message: _loadingMessage,
-          sub: 'Fetching ${_selectedDay == 'today' ? 'today\'s' : 'tomorrow\'s'} 24-hour price curve',
+          message: _loadingMessage(context.l10n),
+          sub: _selectedDay == 'today' ? context.l10n.pricesFetchingToday : context.l10n.pricesFetchingTomorrow,
           icon: Icons.insights_rounded,
           colors: _accent,
         ),
@@ -295,9 +299,9 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 520),
         child: ErrorPanel(
-          title: 'Couldn\'t load prices',
-          message: _errorMessage,
-          actionLabel: 'Retry connection',
+          title: context.l10n.pricesLoadError,
+          message: _error!(context.l10n),
+          actionLabel: context.l10n.retryConnection,
           onAction: _fetchLiveForecast,
         ),
       ),
@@ -318,6 +322,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
     final dailyRange = maxPrice - (_hourlyPrices.isNotEmpty ? _hourlyPrices.reduce((a, b) => a < b ? a : b) : 0.0);
     final bestHour = futurePrices.isNotEmpty ? futurePrices.indexOf(minPrice) + searchStart : 0;
 
+    final l = context.l10n;
     final kpis = ResponsiveGrid(
       minItemWidth: 220,
       children: [
@@ -325,11 +330,11 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
           child: KpiTile(
             icon: Icons.bolt_rounded,
             colors: [AppColors.forPrice(currentPrice), Color.lerp(AppColors.forPrice(currentPrice), AppColors.indigo, 0.35)!],
-            label: isToday ? 'Current price' : 'Opening price',
+            label: isToday ? l.kpiCurrentPrice : l.kpiOpeningPrice,
             number: currentPrice,
             decimals: 1,
             suffix: ' ct',
-            sub: 'per kWh incl. VAT',
+            sub: l.perKwhInclVat,
             valueColor: AppColors.forPrice(currentPrice),
           ),
         ),
@@ -338,11 +343,11 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
           child: KpiTile(
             icon: Icons.show_chart_rounded,
             colors: const [AppColors.indigo, AppColors.violet],
-            label: 'Day average',
+            label: l.kpiDayAverage,
             number: avgPrice,
             decimals: 1,
             suffix: ' ct',
-            sub: 'per kWh incl. VAT',
+            sub: l.perKwhInclVat,
           ),
         ),
         FadeSlideIn(
@@ -350,9 +355,9 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
           child: KpiTile(
             icon: Icons.schedule_rounded,
             colors: const [AppColors.emerald, AppColors.teal],
-            label: isToday ? 'Next best hour' : 'Best hour',
+            label: isToday ? l.kpiNextBestHour : l.kpiBestHour,
             text: _hh(bestHour),
-            sub: '${minPrice.toStringAsFixed(1)} ct/kWh',
+            sub: l.ctPerKwhValue(context.fmt(minPrice, 1)),
             valueColor: AppColors.emerald,
           ),
         ),
@@ -361,11 +366,11 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
           child: KpiTile(
             icon: Icons.swap_vert_rounded,
             colors: _accent,
-            label: 'Daily range',
+            label: l.kpiDailyRange,
             number: dailyRange,
             decimals: 1,
             suffix: ' ct',
-            sub: 'peak minus off-peak',
+            sub: l.kpiPeakMinusOffPeak,
           ),
         ),
       ],
@@ -409,10 +414,13 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
               TextSpan(
                 style: AppType.body(14.5, p.muted, height: 1.5),
                 children: [
-                  TextSpan(text: isToday ? 'Smart move: ' : 'Plan ahead: ', style: AppType.body(14.5, p.text, weight: FontWeight.w700)),
-                  const TextSpan(text: 'shift your dishwasher, laundry or EV charging to '),
+                  TextSpan(
+                    text: isToday ? context.l10n.insightSmart : context.l10n.insightPlan,
+                    style: AppType.body(14.5, p.text, weight: FontWeight.w700),
+                  ),
+                  TextSpan(text: context.l10n.insightBefore),
                   TextSpan(text: _hh(bestHour), style: AppType.body(14.5, AppColors.emerald, weight: FontWeight.w700)),
-                  TextSpan(text: ' — about $savePct% cheaper than the daily average.'),
+                  TextSpan(text: context.l10n.insightAfter(context.fmt(savePct))),
                 ],
               ),
             ),
@@ -470,7 +478,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
                     label: VerticalLineLabel(
                       show: true,
                       alignment: Alignment.topRight,
-                      labelResolver: (_) => ' NOW',
+                      labelResolver: (_) => ' ${context.l10n.now}',
                       style: AppType.mono(10, p.muted, weight: FontWeight.w700),
                     ),
                   ),
@@ -568,7 +576,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
                       AppType.mono(11, p.muted),
                       children: [
                         TextSpan(
-                          text: '${_hourlyPrices[s.x.toInt()].toStringAsFixed(1)} ct/kWh',
+                          text: context.l10n.ctPerKwhValue(context.fmt(_hourlyPrices[s.x.toInt()], 1)),
                           style: AppType.body(14, AppColors.forPrice(_hourlyPrices[s.x.toInt()]), weight: FontWeight.w800),
                         ),
                       ],
@@ -580,8 +588,8 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
     }
 
     return GlassCard(
-      title: 'Hourly price curve',
-      subtitle: 'Hover or tap the curve for exact prices',
+      title: context.l10n.chartTitle,
+      subtitle: context.l10n.chartSubtitle,
       icon: Icons.show_chart_rounded,
       colors: _accent,
       child: Column(
@@ -591,9 +599,9 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
             spacing: 16,
             runSpacing: 8,
             children: [
-              _legendDot(p, AppColors.emerald, 'Cheap < 15 ct'),
-              _legendDot(p, AppColors.amber, 'Mid 15–25 ct'),
-              _legendDot(p, AppColors.rose, 'Peak > 25 ct'),
+              _legendDot(p, AppColors.emerald, context.l10n.legendCheap),
+              _legendDot(p, AppColors.amber, context.l10n.legendMid),
+              _legendDot(p, AppColors.rose, context.l10n.legendPeak),
             ],
           ),
           const SizedBox(height: 20),
@@ -607,7 +615,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
             ),
           ),
           const SizedBox(height: 24),
-          Text('HOURLY HEATMAP', style: AppType.eyebrow(p.faint)),
+          Text(context.l10n.hourlyHeatmap, style: AppType.eyebrow(p.faint)),
           const SizedBox(height: 10),
           _HeatStrip(prices: _hourlyPrices, current: isToday ? currentHour : null),
         ],
@@ -638,20 +646,20 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
     final maxVal = _hourlyPrices.isEmpty ? 1.0 : _hourlyPrices.reduce((a, b) => a > b ? a : b);
 
     return GlassCard(
-      title: 'Price guide',
-      subtitle: 'Retail = wholesale + 15 ct grid/tax + 19% VAT',
+      title: context.l10n.guideTitle,
+      subtitle: context.l10n.guideSubtitle,
       icon: Icons.tune_rounded,
       colors: const [AppColors.emerald, AppColors.teal],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _buildPriceZone(p, color: AppColors.emerald, range: '< 15 ct/kWh', label: 'Cheap', desc: 'Run heat pump, charge EV, do laundry'),
+          _buildPriceZone(p, color: AppColors.emerald, range: '< 15 ct/kWh', label: context.l10n.zoneCheap, desc: context.l10n.zoneCheapDesc),
           const SizedBox(height: 10),
-          _buildPriceZone(p, color: AppColors.amber, range: '15 – 25 ct/kWh', label: 'Mid', desc: 'Normal household use, monitor closely'),
+          _buildPriceZone(p, color: AppColors.amber, range: '15 – 25 ct/kWh', label: context.l10n.zoneMid, desc: context.l10n.zoneMidDesc),
           const SizedBox(height: 10),
-          _buildPriceZone(p, color: AppColors.rose, range: '> 25 ct/kWh', label: 'Peak', desc: 'Avoid big loads, discharge battery'),
+          _buildPriceZone(p, color: AppColors.rose, range: '> 25 ct/kWh', label: context.l10n.zonePeak, desc: context.l10n.zonePeakDesc),
           const SizedBox(height: 26),
-          Text('FIVE CHEAPEST HOURS', style: AppType.eyebrow(p.faint)),
+          Text(context.l10n.fiveCheapestHours, style: AppType.eyebrow(p.faint)),
           const SizedBox(height: 14),
           for (var i = 0; i < cheapest.length; i++)
             Padding(
@@ -682,7 +690,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
                   SizedBox(
                     width: 54,
                     child: Text(
-                      '${cheapest[i].value.toStringAsFixed(1)} ct',
+                      context.l10n.ctValue(context.fmt(cheapest[i].value, 1)),
                       textAlign: TextAlign.right,
                       style: AppType.mono(12, AppColors.forPrice(cheapest[i].value), weight: FontWeight.w700),
                     ),
@@ -699,7 +707,7 @@ class _PriceDashboardScreenState extends State<PriceDashboardScreen> with Single
               const SizedBox(width: 8),
               Expanded(
                 child: Text(
-                  _dataSource.contains('EPEX') ? 'Source: EPEX SPOT DE-LU via Fraunhofer ISE' : 'Source: XGBoost model trained on ENTSO-E data',
+                  _dataSource.contains('EPEX') ? context.l10n.sourceEpex : context.l10n.sourceModel,
                   style: AppType.body(12, p.faint, height: 1.4),
                 ),
               ),
@@ -765,7 +773,7 @@ class _HeatStrip extends StatelessWidget {
               for (var i = 0; i < prices.length; i++)
                 Expanded(
                   child: Tooltip(
-                    message: '${i.toString().padLeft(2, '0')}:00 · ${prices[i].toStringAsFixed(1)} ct/kWh',
+                    message: '${i.toString().padLeft(2, '0')}:00 · ${context.l10n.ctPerKwhValue(context.fmt(prices[i], 1))}',
                     child: TweenAnimationBuilder<double>(
                       tween: Tween(begin: 0, end: 1),
                       duration: Duration(milliseconds: 400 + i * 35),

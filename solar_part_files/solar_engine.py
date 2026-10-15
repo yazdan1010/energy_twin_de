@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import config 
-from optimizer import generate_architect_report 
+from optimizer import generate_architect_report, generate_advice_items
 
 def calculate_architect_analysis(ml_annual_yield, num_panels, monthly_bill, energy_rating, historical_df, ai_accuracy_val):
     """
@@ -128,5 +128,6 @@ def calculate_architect_analysis(ml_annual_yield, num_panels, monthly_bill, ener
     analysis_results["strategic_advice"] = generate_architect_report(
         analysis_results, confidence=95.0, energy_rating=energy_rating
     )
+    analysis_results["advice_items"] = generate_advice_items(analysis_results, energy_rating=energy_rating)
 
     return analysis_results

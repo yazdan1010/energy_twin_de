@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:frontend/custom_app_bar.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 import 'package:frontend/main.dart' show serverWarmup, kBackendUrl;
 import 'package:frontend/ui/kit.dart';
 import 'package:http/http.dart' as http;
@@ -25,14 +26,15 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
 
   int _currentStep = 0;
   bool _isLoading = false;
-  String _errorMessage = '';
+  // Resolved at build time so a language switch mid-load updates the text.
+  String Function(AppLocalizations)? _error;
 
   String? _rawImageBase64;
   double? _lat, _lon;
   final List<Offset> _roofPoints = [];
 
   Map<String, dynamic>? _analysisData;
-  String _loadingMessage = 'Connecting...';
+  String Function(AppLocalizations) _loadingMessage = (l) => l.solarConnecting;
 
   // Nullable so hot reload on an open screen can't leave them undefined.
   Size? _imageSize; // pixel size of the satellite image
@@ -45,7 +47,6 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
   Uint8List _bytes(String b64) => (_decoded ??= {}).putIfAbsent(b64, () => base64Decode(b64));
 
   static const _accent = [AppColors.amber, AppColors.orange];
-  static const _steps = ['Enter details', 'Trace roof', 'View results'];
 
   @override
   void dispose() {
@@ -58,10 +59,10 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
 
   void _startLoadingMessages() {
     Future.delayed(const Duration(seconds: 6), () {
-      if (mounted && _isLoading) setState(() => _loadingMessage = 'Server is warming up...');
+      if (mounted && _isLoading) setState(() => _loadingMessage = (l) => l.loadingWarmingUp);
     });
     Future.delayed(const Duration(seconds: 35), () {
-      if (mounted && _isLoading) setState(() => _loadingMessage = 'Almost there...');
+      if (mounted && _isLoading) setState(() => _loadingMessage = (l) => l.loadingAlmost);
     });
   }
 
@@ -69,8 +70,8 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
     if (_addressController.text.isEmpty) return;
     setState(() {
       _isLoading = true;
-      _errorMessage = '';
-      _loadingMessage = attempt == 1 ? 'Finding your roof...' : 'Retrying... (attempt $attempt of 3)';
+      _error = null;
+      _loadingMessage = attempt == 1 ? (l) => l.solarFindingRoof : (l) => l.loadingRetry(attempt);
     });
     _startLoadingMessages();
     await serverWarmup;
@@ -103,7 +104,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
         if (mounted) _fetchRoofImage(attempt: attempt + 1);
       } else {
         setState(() {
-          _errorMessage = 'Could not find address.';
+          _error = (l) => l.solarAddressNotFound;
           _isLoading = false;
         });
       }
@@ -114,7 +115,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
         if (mounted) _fetchRoofImage(attempt: attempt + 1);
       } else {
         setState(() {
-          _errorMessage = 'Server error. Please try again.';
+          _error = (l) => l.solarServerError;
           _isLoading = false;
         });
       }
@@ -123,13 +124,13 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
 
   Future<void> _runSimulation({int attempt = 1}) async {
     if (_roofPoints.length < 3) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Tap at least 3 corners on the roof!')));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(context.l10n.solarTapAtLeast3)));
       return;
     }
     setState(() {
       _isLoading = true;
-      _errorMessage = '';
-      _loadingMessage = attempt == 1 ? 'Running solar simulation...' : 'Retrying... (attempt $attempt of 3)';
+      _error = null;
+      _loadingMessage = attempt == 1 ? (l) => l.solarRunningSim : (l) => l.loadingRetry(attempt);
     });
     _startLoadingMessages();
     await serverWarmup;
@@ -163,12 +164,14 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
         });
       } else if (response.statusCode == 422) {
         // The outline was understood but no panels fit — retrying won't help.
-        String message = 'No solar panels fit inside the traced outline.';
+        String? serverMessage;
         try {
-          message = (jsonDecode(response.body)['error'] as String?) ?? message;
+          final body = jsonDecode(response.body);
+          // Known codes are shown in the visitor's language; anything else falls back to the server text.
+          if (body['error_code'] != 'no_panels_fit') serverMessage = body['error'] as String?;
         } catch (_) {}
         setState(() {
-          _errorMessage = message;
+          _error = serverMessage == null ? (l) => l.solarNoPanelsFit : (_) => serverMessage!;
           _isLoading = false;
         });
       } else if (attempt < 3) {
@@ -176,7 +179,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
         if (mounted) _runSimulation(attempt: attempt + 1);
       } else {
         setState(() {
-          _errorMessage = 'Simulation failed. Please try again.';
+          _error = (l) => l.solarSimFailed;
           _isLoading = false;
         });
       }
@@ -187,7 +190,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
         if (mounted) _runSimulation(attempt: attempt + 1);
       } else {
         setState(() {
-          _errorMessage = 'Failed to connect to backend.';
+          _error = (l) => l.solarBackendUnreachable;
           _isLoading = false;
         });
       }
@@ -220,6 +223,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final p = AppPalette.of(context);
+    final l = context.l10n;
     final Widget content;
     final String key;
     if (_isLoading) {
@@ -228,24 +232,24 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
           child: LoadingPanel(
-            message: _loadingMessage,
-            sub: _currentStep == 0 ? 'Fetching satellite image...' : 'Running solar analysis...',
+            message: _loadingMessage(l),
+            sub: _currentStep == 0 ? l.solarFetchingImage : l.solarRunningAnalysis,
             icon: _currentStep == 0 ? Icons.satellite_alt_rounded : Icons.auto_awesome_rounded,
             colors: _accent,
           ),
         ),
       );
-    } else if (_errorMessage.isNotEmpty) {
+    } else if (_error != null) {
       key = 'error';
       content = Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 520),
           child: ErrorPanel(
-            message: _errorMessage,
-            actionLabel: _currentStep == 1 && _rawImageBase64 != null ? 'Back to tracing' : 'Start over',
+            message: _error!(l),
+            actionLabel: _currentStep == 1 && _rawImageBase64 != null ? l.backToTracing : l.startOver,
             actionIcon: Icons.arrow_back_rounded,
             onAction: () => setState(() {
-              _errorMessage = '';
+              _error = null;
               if (!(_currentStep == 1 && _rawImageBase64 != null)) _currentStep = 0;
             }),
           ),
@@ -261,8 +265,8 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
       extendBodyBehindAppBar: true,
       appBar: CustomAppBar(
         themeNotifier: widget.themeNotifier,
-        title: 'Solar AI',
-        subtitle: 'Satellite roof analysis · yield & payback',
+        title: l.solarTitle,
+        subtitle: l.solarSubtitle,
         icon: Icons.solar_power_rounded,
         colors: _accent,
       ),
@@ -279,7 +283,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
                   Center(
                     child: ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 640),
-                      child: FadeSlideIn(child: StepIndicator(steps: _steps, active: _currentStep, colors: _accent)),
+                      child: FadeSlideIn(child: StepIndicator(steps: [l.stepEnterDetails, l.stepTraceRoof, l.stepViewResults], active: _currentStep, colors: _accent)),
                     ),
                   ),
                   const SizedBox(height: 36),
@@ -307,23 +311,24 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
     return LayoutBuilder(
       builder: (context, c) {
         final wide = c.maxWidth > 860;
+        final l = context.l10n;
         final titleStyle = AppType.display(wide ? 48 : 34, p.text, height: 1.06);
         final copy = Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Pill(color: AppColors.amber, icon: Icons.wb_sunny_rounded, label: 'Solar irradiance via Open-Meteo · Satellite imagery'),
+            Pill(color: AppColors.amber, icon: Icons.wb_sunny_rounded, label: l.solarPill),
             const SizedBox(height: 20),
-            Text('See what your roof\ncould', style: titleStyle),
+            Text(l.solarHeadline1, style: titleStyle),
             ShaderMask(
               blendMode: BlendMode.srcIn,
               shaderCallback: (b) => const LinearGradient(colors: [AppColors.amber, AppColors.orange, AppColors.rose]).createShader(b),
-              child: Text('earn you.', style: titleStyle),
+              child: Text(l.solarHeadline2, style: titleStyle),
             ),
             const SizedBox(height: 18),
             ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 560),
               child: Text(
-                'Enter your property address and energy details. We fetch a satellite image, you trace your roof outline, and our AI calculates your exact solar potential and financial return.',
+                l.solarIntro,
                 style: AppType.body(wide ? 17 : 15.5, p.muted, height: 1.6),
               ),
             ),
@@ -332,9 +337,9 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
               spacing: 10,
               runSpacing: 10,
               children: [
-                _heroChip(p, Icons.route_rounded, '3-step analysis'),
-                _heroChip(p, Icons.euro_rounded, 'ROI & payback calc'),
-                _heroChip(p, Icons.eco_rounded, 'CO₂ impact report'),
+                _heroChip(p, Icons.route_rounded, l.solarChip1),
+                _heroChip(p, Icons.euro_rounded, l.solarChip2),
+                _heroChip(p, Icons.eco_rounded, l.solarChip3),
               ],
             ),
           ],
@@ -383,9 +388,10 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
   }
 
   Widget _buildFormCard(AppPalette p) {
+    final l = context.l10n;
     return GlassCard(
-      title: 'Property details',
-      subtitle: 'Enter your address to fetch a satellite image of your roof.',
+      title: l.propertyDetails,
+      subtitle: l.propertyDetailsSubtitle,
       icon: Icons.location_on_rounded,
       colors: _accent,
       strong: true,
@@ -395,19 +401,19 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
         children: [
           AppTextField(
             controller: _addressController,
-            label: 'Property address',
-            hint: 'Street, number, postcode, city',
-            helper: 'e.g. Musterstraße 12, 10115 Berlin',
+            label: l.addressLabel,
+            hint: l.addressHint,
+            helper: l.addressExample,
             icon: Icons.location_on_outlined,
             accent: AppColors.amber,
             onSubmitted: (_) => _fetchRoofImage(),
           ),
           const SizedBox(height: 24),
-          Text('Energy efficiency class', style: AppType.body(13, p.text, weight: FontWeight.w600, height: 1.2)),
+          Text(l.energyClassLabel, style: AppType.body(13, p.text, weight: FontWeight.w600, height: 1.2)),
           const SizedBox(height: 10),
           _EnergyClassPicker(value: _energyRating, onChanged: (v) => setState(() => _energyRating = v)),
           const SizedBox(height: 8),
-          Text('EU energy label A (best) – G (worst)', style: AppType.body(12, p.muted, height: 1.3)),
+          Text(l.energyClassHelper, style: AppType.body(12, p.muted, height: 1.3)),
           const SizedBox(height: 24),
           ResponsiveGrid(
             minItemWidth: 230,
@@ -415,8 +421,8 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
             children: [
               AppTextField(
                 controller: _gridPriceController,
-                label: 'Grid electricity price',
-                helper: 'Your current tariff in ct/kWh',
+                label: l.gridPriceLabel,
+                helper: l.gridPriceHelper,
                 icon: Icons.bolt_outlined,
                 suffix: 'ct/kWh',
                 accent: AppColors.amber,
@@ -424,19 +430,19 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
               ),
               AppTextField(
                 controller: _billController,
-                label: 'Monthly electricity bill',
-                helper: 'Average monthly bill in euros',
+                label: l.elecBillLabel,
+                helper: l.elecBillHelper,
                 icon: Icons.euro_outlined,
-                suffix: '€/mo',
+                suffix: l.perMonthShort,
                 accent: AppColors.amber,
                 keyboardType: const TextInputType.numberWithOptions(decimal: true),
               ),
               AppTextField(
                 controller: _householdController,
-                label: 'Household size',
-                helper: 'Number of people living there',
+                label: l.householdLabel,
+                helper: l.householdHelper,
                 icon: Icons.people_outline_rounded,
-                suffix: 'people',
+                suffix: l.peopleSuffix,
                 accent: AppColors.amber,
                 keyboardType: TextInputType.number,
               ),
@@ -446,7 +452,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
           ValueListenableBuilder<TextEditingValue>(
             valueListenable: _addressController,
             builder: (_, v, _) => PrimaryButton(
-              label: 'Fetch satellite image',
+              label: l.fetchSatellite,
               icon: Icons.satellite_alt_rounded,
               expand: true,
               colors: _accent,
@@ -519,7 +525,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
                             children: [
                               const Icon(Icons.touch_app_rounded, color: Colors.white, size: 18),
                               const SizedBox(width: 8),
-                              Text('Tap corners of your roof', style: AppType.body(13, Colors.white, weight: FontWeight.w600, height: 1.2)),
+                              Text(context.l10n.tapRoofCorners, style: AppType.body(13, Colors.white, weight: FontWeight.w600, height: 1.2)),
                             ],
                           ),
                         ),
@@ -532,7 +538,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
                           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                           decoration: BoxDecoration(color: Colors.black.withValues(alpha: 0.55), borderRadius: BorderRadius.circular(8)),
                           child: Text(
-                            '${_lat!.toStringAsFixed(5)}, ${_lon!.toStringAsFixed(5)}',
+                            '${context.fmt(_lat!, 5)}, ${context.fmt(_lon!, 5)}',
                             style: AppType.mono(10.5, Colors.white.withValues(alpha: 0.9)),
                           ),
                         ),
@@ -550,14 +556,11 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
   Widget _buildTracePanel(AppPalette p) {
     final n = _roofPoints.length;
     final ready = n >= 3;
-    const tips = [
-      'Tap each corner of the roof surface you want to cover.',
-      'Go around the outline in order — clockwise or counter-clockwise.',
-      'Run the AI analysis once the shape looks right.',
-    ];
+    final l = context.l10n;
+    final tips = [l.traceTip1, l.traceTip2, l.traceTip3];
     return GlassCard(
-      title: 'Trace your roof',
-      subtitle: 'Tap the corners of your roof polygon in order — at least 3 points.',
+      title: l.traceTitle,
+      subtitle: l.traceSubtitle,
       icon: Icons.touch_app_rounded,
       colors: _accent,
       strong: true,
@@ -604,13 +607,13 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
                     const SizedBox(width: 8),
                     Padding(
                       padding: const EdgeInsets.only(bottom: 4),
-                      child: Text(n == 1 ? 'corner placed' : 'corners placed', style: AppType.body(13, p.muted, height: 1.2)),
+                      child: Text(n == 1 ? l.cornerPlaced : l.cornersPlaced, style: AppType.body(13, p.muted, height: 1.2)),
                     ),
                     const Spacer(),
                     Pill(
                       color: ready ? AppColors.emerald : AppColors.amber,
                       icon: ready ? Icons.check_rounded : Icons.more_horiz_rounded,
-                      label: ready ? 'Ready' : '${3 - n} more needed',
+                      label: ready ? l.ready : l.moreNeeded(3 - n),
                     ),
                   ],
                 ),
@@ -629,7 +632,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
             children: [
               Expanded(
                 child: SecondaryButton(
-                  label: 'Undo',
+                  label: l.undo,
                   icon: Icons.undo_rounded,
                   accent: AppColors.amber,
                   onTap: n == 0 ? null : () => setState(() => _roofPoints.removeLast()),
@@ -638,7 +641,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
               const SizedBox(width: 10),
               Expanded(
                 child: SecondaryButton(
-                  label: 'Clear ($n)',
+                  label: l.clearCount(n),
                   icon: Icons.delete_sweep_rounded,
                   accent: AppColors.amber,
                   onTap: n == 0 ? null : () => setState(() => _roofPoints.clear()),
@@ -648,7 +651,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
           ),
           const SizedBox(height: 12),
           PrimaryButton(
-            label: 'Run AI analysis',
+            label: l.runAiAnalysis,
             icon: Icons.auto_awesome_rounded,
             expand: true,
             colors: _accent,
@@ -657,7 +660,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
           const SizedBox(height: 16),
           Center(
             child: TextLink(
-              label: 'Change address',
+              label: l.changeAddress,
               color: p.muted,
               icon: Icons.edit_location_alt_rounded,
               onTap: () => setState(() => _currentStep = 0),
@@ -677,7 +680,6 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
     final roofArea = (_analysisData!['roof_area'] as num?)?.toDouble() ?? 0;
     final numPanels = (_analysisData!['num_panels'] as num?)?.toInt() ?? 0;
     final capacityKwp = (_analysisData!['capacity_kwp'] as num?)?.toDouble() ?? 0;
-    final advice = List<String>.from(_analysisData!['strategic_advice'] ?? []);
     final profit20 = (fin['twenty_year_profit'] as num?)?.toDouble() ?? 0;
     final annualSav = (fin['annual_savings'] as num?)?.toDouble() ?? 0;
     final monthlyRel = (fin['monthly_relief'] as num?)?.toDouble() ?? 0;
@@ -692,7 +694,9 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
     return LayoutBuilder(
       builder: (context, c) {
         final isWide = c.maxWidth > 860;
-        final restart = SecondaryButton(label: 'Analyze another property', icon: Icons.refresh_rounded, accent: AppColors.amber, onTap: _resetAll);
+        final l = context.l10n;
+        final advice = _adviceTexts(l);
+        final restart = SecondaryButton(label: l.analyzeAnother, icon: Icons.refresh_rounded, accent: AppColors.amber, onTap: _resetAll);
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -702,8 +706,8 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
                 children: [
                   Expanded(
                     child: SectionHeader(
-                      eyebrow: 'ANALYSIS COMPLETE',
-                      title: 'Your roof\'s solar potential.',
+                      eyebrow: l.analysisComplete,
+                      title: l.solarPotentialTitle,
                       wide: isWide,
                       accent: AppColors.amber,
                       compact: true,
@@ -723,10 +727,10 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
                   child: KpiTile(
                     icon: Icons.solar_power_rounded,
                     colors: _accent,
-                    label: 'Panels on your roof',
+                    label: l.kpiPanels,
                     number: numPanels.toDouble(),
-                    suffix: ' panels',
-                    sub: '${capacityKwp.toStringAsFixed(1)} kWp installed capacity',
+                    suffix: l.panelsSuffix,
+                    sub: l.kwpCapacity(context.fmt(capacityKwp, 1)),
                   ),
                 ),
                 FadeSlideIn(
@@ -734,11 +738,10 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
                   child: KpiTile(
                     icon: Icons.euro_rounded,
                     colors: const [AppColors.emerald, AppColors.teal],
-                    label: 'Annual savings',
+                    label: l.kpiAnnualSavings,
                     number: annualSav,
-                    prefix: '€',
-                    thousands: true,
-                    sub: 'Annual electricity savings',
+                    currency: true,
+                    sub: l.annualElecSavings,
                     valueColor: AppColors.emerald,
                   ),
                 ),
@@ -747,11 +750,11 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
                   child: KpiTile(
                     icon: Icons.replay_rounded,
                     colors: const [AppColors.sky, AppColors.indigo],
-                    label: 'Payback period',
+                    label: l.kpiPayback,
                     number: payback,
                     decimals: 1,
-                    suffix: ' yrs',
-                    sub: 'Investment payback period',
+                    suffix: l.yearsSuffix,
+                    sub: l.investmentPayback,
                   ),
                 ),
                 FadeSlideIn(
@@ -759,11 +762,11 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
                   child: KpiTile(
                     icon: Icons.eco_rounded,
                     colors: const [AppColors.teal, AppColors.emerald],
-                    label: 'CO₂ avoided',
+                    label: l.kpiCo2Avoided,
                     number: co2Saved,
                     decimals: 1,
                     suffix: ' t',
-                    sub: 'CO₂ saved per year',
+                    sub: l.co2SavedPerYear,
                   ),
                 ),
               ],
@@ -822,8 +825,47 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
     );
   }
 
+  /// Tips in the visitor's language from the backend's structured `advice_items`;
+  /// older backends only send English `strategic_advice` strings.
+  List<String> _adviceTexts(AppLocalizations l) {
+    final items = _analysisData!['advice_items'];
+    if (items is! List) return List<String>.from(_analysisData!['strategic_advice'] ?? []);
+    return [for (final item in items) ?_adviceText(l, item)];
+  }
+
+  String? _adviceText(AppLocalizations l, Object? item) {
+    if (item is! Map) return null;
+    final params = (item['params'] as Map?) ?? const {};
+    num n(String key) => (params[key] as num?) ?? 0;
+    return switch (item['id']) {
+      'finance_direct' => l.adviceFinanceDirect(context.eur(n('profit'))),
+      'finance_loan' => l.adviceFinanceLoan,
+      'finance_lease' => l.adviceFinanceLease,
+      'independence_high' => l.adviceIndependenceHigh(context.fmt(n('autarky'), 1)),
+      'independence_low' => l.adviceIndependenceLow(context.fmt(n('autarky'), 1)),
+      'insulation_upgrade' => l.adviceInsulation('${params['rating'] ?? ''}'),
+      'climate_stable' => l.adviceClimateStable(context.fmt(n('score'))),
+      'bifacial' => l.adviceBifacial,
+      'team_meister' => l.adviceTeamMeister,
+      'team_nrw' => l.adviceTeamRegional,
+      'sustainability' => l.adviceSustainability(
+        context.fmt(n('co2'), 1),
+        context.fmt(n('trees')),
+        _ecoGrade(l, '${params['grade'] ?? ''}'),
+      ),
+      _ => null,
+    };
+  }
+
+  String _ecoGrade(AppLocalizations l, String grade) => switch (grade) {
+    'Climate Hero' => l.ecoClimateHero,
+    'Eco-Warrior' => l.ecoWarrior,
+    _ => grade,
+  };
+
   Widget _buildLocationBar(AppPalette p) {
-    final address = (_fetchedAddress?.isNotEmpty ?? false) ? _fetchedAddress! : 'Selected property';
+    final l = context.l10n;
+    final address = (_fetchedAddress?.isNotEmpty ?? false) ? _fetchedAddress! : l.selectedProperty;
     return Glass(
       radius: 20,
       padding: const EdgeInsets.all(16),
@@ -835,12 +877,12 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('ANALYZED PROPERTY', style: AppType.eyebrow(AppColors.amber)),
+                Text(l.analyzedProperty, style: AppType.eyebrow(AppColors.amber)),
                 const SizedBox(height: 4),
                 Text(address, style: AppType.display(18, p.text, height: 1.25)),
                 if (_lat != null && _lon != null) ...[
                   const SizedBox(height: 2),
-                  Text('${_lat!.toStringAsFixed(5)}° N, ${_lon!.toStringAsFixed(5)}° E', style: AppType.mono(11.5, p.muted)),
+                  Text('${context.fmt(_lat!, 5)}° N, ${context.fmt(_lon!, 5)}° E', style: AppType.mono(11.5, p.muted)),
                 ],
               ],
             ),
@@ -852,8 +894,8 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
 
   Widget _buildImageCard(AppPalette p, String? imgB64, double roofArea, int numPanels) {
     return GlassCard(
-      title: 'Analyzed roof',
-      subtitle: 'AI panel placement overlay — $numPanels panels on ${roofArea.toStringAsFixed(0)} m²',
+      title: context.l10n.analyzedRoof,
+      subtitle: context.l10n.panelOverlay(context.fmt(numPanels), context.fmt(roofArea)),
       icon: Icons.satellite_alt_rounded,
       colors: const [AppColors.sky, AppColors.indigo],
       padding: const EdgeInsets.all(20),
@@ -866,7 +908,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
               child: Image.memory(_bytes(imgB64), fit: BoxFit.contain, width: double.infinity, gaplessPlayback: true),
             ),
           const SizedBox(height: 14),
-          Center(child: Pill(color: AppColors.amber, icon: Icons.square_foot_rounded, label: 'Roof area: ${roofArea.toStringAsFixed(0)} m²')),
+          Center(child: Pill(color: AppColors.amber, icon: Icons.square_foot_rounded, label: context.l10n.roofArea(context.fmt(roofArea)))),
         ],
       ),
     );
@@ -874,8 +916,8 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
 
   Widget _buildAdvisoryCard(AppPalette p, List<String> advice) {
     return GlassCard(
-      title: 'AI strategic advisory',
-      subtitle: 'Personalized recommendations from EnergyTwin\'s solar analysis engine',
+      title: context.l10n.advisoryTitle,
+      subtitle: context.l10n.advisorySubtitle,
       icon: Icons.auto_awesome_rounded,
       colors: _accent,
       padding: const EdgeInsets.all(20),
@@ -919,14 +961,15 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
   }
 
   Widget _buildFinancialCard(AppPalette p, double profit20, double annualSav, double monthlyRel, double payback) {
+    final l = context.l10n;
     return GlassCard(
-      title: 'Financial overview',
+      title: l.financialTitle,
       icon: Icons.account_balance_wallet_rounded,
       colors: const [AppColors.emerald, AppColors.teal],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('20-year net profit', style: AppType.body(12.5, p.muted, weight: FontWeight.w600, height: 1.3)),
+          Text(l.netProfit20, style: AppType.body(12.5, p.muted, weight: FontWeight.w600, height: 1.3)),
           const SizedBox(height: 4),
           FittedBox(
             fit: BoxFit.scaleDown,
@@ -934,27 +977,27 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
             child: CountUp(
               value: profit20,
               decimals: 0,
-              prefix: '€',
-              thousands: true,
+              currency: true,
               duration: const Duration(milliseconds: 1800),
               style: AppType.display(34, AppColors.emerald, height: 1.1),
             ),
           ),
-          Text('Total earnings after installation cost', style: AppType.body(12, p.faint, height: 1.3)),
+          Text(l.netProfit20Hint, style: AppType.body(12, p.faint, height: 1.3)),
           const SizedBox(height: 18),
           Divider(color: p.border, height: 1),
           const SizedBox(height: 16),
-          _metricRow(p, 'Annual savings', '€${annualSav.toStringAsFixed(0)}', 'Yearly reduction in electricity bill', AppColors.emerald),
-          _metricRow(p, 'Monthly relief', '€${monthlyRel.toStringAsFixed(0)}', 'Average monthly bill reduction', AppColors.sky),
-          _metricRow(p, 'Payback period', '${payback.toStringAsFixed(1)} years', 'Time to recoup installation investment', AppColors.orange),
+          _metricRow(p, l.kpiAnnualSavings, context.eur(annualSav), l.annualSavingsHint, AppColors.emerald),
+          _metricRow(p, l.monthlyRelief, context.eur(monthlyRel), l.monthlyReliefHint, AppColors.sky),
+          _metricRow(p, l.kpiPayback, l.yearsValue(context.fmt(payback, 1)), l.paybackHint, AppColors.orange),
         ],
       ),
     );
   }
 
   Widget _buildSystemCard(AppPalette p, double autarky, double locScore, double batImpact) {
+    final l = context.l10n;
     return GlassCard(
-      title: 'System metrics',
+      title: l.systemMetrics,
       icon: Icons.donut_large_rounded,
       colors: const [AppColors.sky, AppColors.indigo],
       child: Column(
@@ -963,15 +1006,15 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: RingMeter(value: autarky / 100, colors: _accent, label: 'Independence', size: 84, stroke: 9)),
+              Expanded(child: RingMeter(value: autarky / 100, colors: _accent, label: l.independence, size: 84, stroke: 9)),
               Expanded(
-                child: RingMeter(value: locScore / 100, colors: const [AppColors.sky, AppColors.blue], label: 'Sun score', size: 84, stroke: 9),
+                child: RingMeter(value: locScore / 100, colors: const [AppColors.sky, AppColors.blue], label: l.sunScore, size: 84, stroke: 9),
               ),
               Expanded(
                 child: RingMeter(
                   value: batImpact / 100,
                   colors: const [AppColors.violet, AppColors.indigo],
-                  label: 'Battery value',
+                  label: l.batteryValue,
                   size: 84,
                   stroke: 9,
                 ),
@@ -983,7 +1026,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
             padding: const EdgeInsets.all(14),
             decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), color: p.field, border: Border.all(color: p.border)),
             child: Text(
-              'Independence: % of electricity self-produced. Sun Score: location quality. Battery Value: estimated benefit of adding a home battery.',
+              l.metricsExplain,
               style: AppType.body(12, p.muted, height: 1.5),
             ),
           ),
@@ -993,8 +1036,9 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
   }
 
   Widget _buildEnvironmentCard(AppPalette p, double co2Saved, int treeCount, String ecoGrade) {
+    final l = context.l10n;
     return GlassCard(
-      title: 'Environmental impact',
+      title: l.envTitle,
       icon: Icons.eco_rounded,
       colors: const [AppColors.teal, AppColors.emerald],
       child: Column(
@@ -1014,7 +1058,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
                 child: FittedBox(
                   child: Padding(
                     padding: const EdgeInsets.all(8),
-                    child: Text(ecoGrade, style: AppType.display(26, Colors.white)),
+                    child: Text(_ecoGrade(l, ecoGrade), style: AppType.display(26, Colors.white)),
                   ),
                 ),
               ),
@@ -1023,8 +1067,8 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text('EnergyTwin eco grade', style: AppType.body(14, p.text, weight: FontWeight.w700, height: 1.3)),
-                    Text('Sustainability rating for this system', style: AppType.body(12, p.faint, height: 1.3)),
+                    Text(l.ecoGradeTitle, style: AppType.body(14, p.text, weight: FontWeight.w700, height: 1.3)),
+                    Text(l.ecoGradeHint, style: AppType.body(12, p.faint, height: 1.3)),
                   ],
                 ),
               ),
@@ -1033,8 +1077,8 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
           const SizedBox(height: 18),
           Divider(color: p.border, height: 1),
           const SizedBox(height: 16),
-          _metricRow(p, 'CO₂ eliminated', '${co2Saved.toStringAsFixed(1)} t/yr', 'Annual carbon emissions prevented', AppColors.emerald),
-          _metricRow(p, 'Tree equivalent', '~$treeCount trees/yr', 'Annual CO₂ absorption equivalent', AppColors.teal),
+          _metricRow(p, l.co2Eliminated, l.tonsPerYear(context.fmt(co2Saved, 1)), l.co2EliminatedHint, AppColors.emerald),
+          _metricRow(p, l.treeEquivalent, l.treesPerYear(context.fmt(treeCount)), l.treeEquivalentHint, AppColors.teal),
           const SizedBox(height: 4),
           Container(
             padding: const EdgeInsets.all(12),
@@ -1048,7 +1092,7 @@ class _SolarDashboardScreenState extends State<SolarDashboardScreen> {
                 const Icon(Icons.verified_rounded, color: AppColors.emerald, size: 17),
                 const SizedBox(width: 9),
                 Expanded(
-                  child: Text('BAFA-eligible system — qualifies for German state subsidy', style: AppType.body(12.5, p.text, height: 1.35)),
+                  child: Text(l.bafaEligible, style: AppType.body(12.5, p.text, height: 1.35)),
                 ),
               ],
             ),
@@ -1116,7 +1160,7 @@ class _EnergyClassPicker extends StatelessWidget {
                   child: Semantics(
                     button: true,
                     selected: value == _classes[i].$1,
-                    label: 'Energy class ${_classes[i].$1}',
+                    label: context.l10n.energyClassSemantics(_classes[i].$1),
                     child: AnimatedContainer(
                       duration: const Duration(milliseconds: 250),
                       curve: Curves.easeOutBack,

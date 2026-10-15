@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:frontend/custom_app_bar.dart';
+import 'package:frontend/l10n/app_localizations.dart';
 import 'package:frontend/main.dart' show serverWarmup, kBackendUrl;
 import 'package:frontend/ui/kit.dart';
 import 'package:http/http.dart' as http;
@@ -21,8 +22,9 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
 
   bool _isLoading = false;
   Map<String, dynamic>? _roiData;
-  String _errorMessage = '';
-  String _loadingMessage = 'Calculating...';
+  // Resolved at build time so a language switch mid-load updates the text.
+  String Function(AppLocalizations)? _error;
+  String Function(AppLocalizations) _loadingMessage = (l) => l.advisorCalculating;
 
   final GlobalKey _resultsKey = GlobalKey();
   final GlobalKey _statusKey = GlobalKey();
@@ -48,22 +50,22 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
   Future<void> _calculateROI({int attempt = 1}) async {
     final double? userBill = double.tryParse(_gasBillController.text.trim());
     if (userBill == null || userBill <= 0) {
-      setState(() => _errorMessage = 'Please enter a valid monthly bill.');
+      setState(() => _error = (l) => l.advisorInvalidBill);
       return;
     }
     FocusScope.of(context).unfocus();
     setState(() {
       _isLoading = true;
-      _errorMessage = '';
+      _error = null;
       _roiData = null;
-      _loadingMessage = attempt == 1 ? 'Connecting to server...' : 'Retrying... (attempt $attempt of 3)';
+      _loadingMessage = attempt == 1 ? (l) => l.loadingConnecting : (l) => l.loadingRetry(attempt);
     });
     if (attempt == 1) _scrollTo(_statusKey);
     Future.delayed(const Duration(seconds: 6), () {
-      if (mounted && _isLoading) setState(() => _loadingMessage = 'Server is warming up...');
+      if (mounted && _isLoading) setState(() => _loadingMessage = (l) => l.loadingWarmingUp);
     });
     Future.delayed(const Duration(seconds: 35), () {
-      if (mounted && _isLoading) setState(() => _loadingMessage = 'Almost there...');
+      if (mounted && _isLoading) setState(() => _loadingMessage = (l) => l.loadingAlmost);
     });
     await serverWarmup;
     if (!mounted) return;
@@ -91,7 +93,8 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
         if (mounted) _calculateROI(attempt: attempt + 1);
       } else {
         setState(() {
-          _errorMessage = 'Server error ${response.statusCode}.';
+          final code = response.statusCode;
+          _error = (l) => l.advisorServerError(code);
           _isLoading = false;
         });
       }
@@ -102,7 +105,7 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
         if (mounted) _calculateROI(attempt: attempt + 1);
       } else {
         setState(() {
-          _errorMessage = 'Could not reach server after 3 attempts.';
+          _error = (l) => l.advisorUnreachable;
           _isLoading = false;
         });
       }
@@ -124,8 +127,8 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
       extendBodyBehindAppBar: true,
       appBar: CustomAppBar(
         themeNotifier: widget.themeNotifier,
-        title: 'Heat Pump Advisor',
-        subtitle: 'ROI simulation · AI off-peak scheduling',
+        title: context.l10n.advisorTitle,
+        subtitle: context.l10n.advisorSubtitle,
         icon: Icons.heat_pump_rounded,
         colors: _accent,
       ),
@@ -150,9 +153,9 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
                       FadeSlideIn(
                         delay: const Duration(milliseconds: 250),
                         child: SectionHeader(
-                          eyebrow: 'YOUR SIMULATION',
-                          title: 'Tell us about your home.',
-                          subtitle: 'Three inputs are all the Digital Twin needs to model your heating demand.',
+                          eyebrow: context.l10n.advisorSimEyebrow,
+                          title: context.l10n.advisorSimTitle,
+                          subtitle: context.l10n.advisorSimSubtitle,
                           wide: isWide,
                           compact: true,
                         ),
@@ -183,14 +186,14 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
                                 const SizedBox(height: 24),
                                 FadeSlideIn(
                                   child: LoadingPanel(
-                                    message: _loadingMessage,
-                                    sub: 'Running Digital Twin simulation...',
+                                    message: _loadingMessage(context.l10n),
+                                    sub: context.l10n.advisorRunningTwin,
                                     icon: Icons.heat_pump_rounded,
                                     colors: _accent,
                                   ),
                                 ),
                               ],
-                              if (_errorMessage.isNotEmpty) ...[const SizedBox(height: 24), FadeSlideIn(child: _buildErrorCard(p))],
+                              if (_error != null) ...[const SizedBox(height: 24), FadeSlideIn(child: _buildErrorCard(p))],
                             ],
                           ),
                         ),
@@ -212,23 +215,24 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
 
   // ---------------------------------------------------------------- hero
   Widget _buildHero(AppPalette p, bool isWide) {
+    final l = context.l10n;
     final titleStyle = AppType.display(isWide ? 48 : 34, p.text, height: 1.06);
     final copy = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Pill(color: AppColors.emerald, icon: Icons.bolt_rounded, label: 'Powered by live EPEX SPOT market data'),
+        Pill(color: AppColors.emerald, icon: Icons.bolt_rounded, label: l.advisorPill),
         const SizedBox(height: 20),
-        Text('Swap your gas boiler\nfor a', style: titleStyle),
+        Text(l.advisorHeadline1, style: titleStyle),
         ShaderMask(
           blendMode: BlendMode.srcIn,
           shaderCallback: (b) => const LinearGradient(colors: [AppColors.emerald, AppColors.teal, AppColors.sky]).createShader(b),
-          child: Text('smart heat pump.', style: titleStyle),
+          child: Text(l.advisorHeadline2, style: titleStyle),
         ),
         const SizedBox(height: 18),
         ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 560),
           child: Text(
-            'Replace your gas boiler with a smart heat pump and let EnergyTwin\'s AI schedule heating around cheap electricity windows. Enter your property details to see your exact savings.',
+            l.advisorIntro,
             style: AppType.body(isWide ? 17 : 15.5, p.muted, height: 1.6),
           ),
         ),
@@ -237,10 +241,10 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
           spacing: 10,
           runSpacing: 10,
           children: [
-            _heroChip(p, Icons.eco_rounded, '3–4× more efficient than gas'),
-            _heroChip(p, Icons.schedule_rounded, 'AI off-peak scheduling'),
-            _heroChip(p, Icons.co2_rounded, 'Up to 80% less CO₂'),
-            _heroChip(p, Icons.euro_rounded, '€15k install, BAFA subsidy eligible'),
+            _heroChip(p, Icons.eco_rounded, l.advisorChip1),
+            _heroChip(p, Icons.schedule_rounded, l.advisorChip2),
+            _heroChip(p, Icons.co2_rounded, l.advisorChip3),
+            _heroChip(p, Icons.euro_rounded, l.advisorChip4),
           ],
         ),
       ],
@@ -276,25 +280,11 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
 
   // ---------------------------------------------------------------- how it works
   Widget _buildHowItWorks(AppPalette p, bool isWide) {
-    const steps = [
-      (
-        Icons.local_fire_department_rounded,
-        [AppColors.orange, AppColors.rose],
-        'Your gas boiler today',
-        'Burns natural gas at ~85% efficiency. German gas costs ~€0.10/kWh. Heating a typical home produces 1,200–2,400 kg of CO₂ every year.',
-      ),
-      (
-        Icons.heat_pump_rounded,
-        [AppColors.sky, AppColors.blue],
-        'The heat pump upgrade',
-        'Moves heat from outdoor air using a small amount of electricity. A COP of 3.5 means 1 kWh in → 3.5 kWh of heat out — far more efficient than any combustion boiler.',
-      ),
-      (
-        Icons.auto_awesome_rounded,
-        [AppColors.emerald, AppColors.teal],
-        'EnergyTwin AI scheduling',
-        'Our AI monitors German EPEX SPOT prices and pre-heats your home during cheap windows (overnight wind surplus, midday solar dip) — saving an extra 40% on electricity.',
-      ),
+    final l = context.l10n;
+    final steps = [
+      (Icons.local_fire_department_rounded, const [AppColors.orange, AppColors.rose], l.advisorStep1Title, l.advisorStep1Body),
+      (Icons.heat_pump_rounded, const [AppColors.sky, AppColors.blue], l.advisorStep2Title, l.advisorStep2Body),
+      (Icons.auto_awesome_rounded, const [AppColors.emerald, AppColors.teal], l.advisorStep3Title, l.advisorStep3Body),
     ];
 
     final cards = [
@@ -315,8 +305,8 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         SectionHeader(
-          eyebrow: 'WHY IT PAYS OFF',
-          title: 'From burning gas to\nsmart, scheduled heat.',
+          eyebrow: l.advisorWhyEyebrow,
+          title: l.advisorWhyTitle,
           wide: isWide,
           compact: true,
         ),
@@ -367,20 +357,17 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
 
   // ---------------------------------------------------------------- input
   Widget _buildInputCard(AppPalette p) {
-    final copHints = {
-      'poor': 'COP ≈ 2.8  ·  needs higher water temps',
-      'average': 'COP ≈ 3.5  ·  typical German installation',
-      'good': 'COP ≈ 4.2  ·  excellent with underfloor heating',
-    };
-    const levels = [
-      ('poor', 'Poor', 'Pre-1980, minimal insulation', AppColors.rose),
-      ('average', 'Average', 'Standard German construction', AppColors.amber),
-      ('good', 'Good', 'Modern, renovated or passive', AppColors.emerald),
+    final l = context.l10n;
+    final copHints = {'poor': l.copHintPoor, 'average': l.copHintAverage, 'good': l.copHintGood};
+    final levels = [
+      ('poor', l.insulationPoor, l.insulationPoorDesc, AppColors.rose),
+      ('average', l.insulationAverage, l.insulationAverageDesc, AppColors.amber),
+      ('good', l.insulationGood, l.insulationGoodDesc, AppColors.emerald),
     ];
 
     return GlassCard(
-      title: 'Your property',
-      subtitle: 'The bill auto-estimates as you adjust size and insulation.',
+      title: l.propertyTitle,
+      subtitle: l.propertySubtitle,
       icon: Icons.home_rounded,
       colors: _accent,
       strong: true,
@@ -390,15 +377,15 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
         children: [
           AppTextField(
             controller: _gasBillController,
-            label: 'Monthly heating / gas bill',
-            helper: 'Your average monthly gas or district heating bill',
+            label: l.gasBillLabel,
+            helper: l.gasBillHelper,
             icon: Icons.euro_rounded,
-            suffix: '€ / month',
+            suffix: l.perMonthSuffix,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             onSubmitted: (_) => _isLoading ? null : _calculateROI(),
           ),
           const SizedBox(height: 24),
-          Text('Building insulation', style: AppType.body(13, p.text, weight: FontWeight.w600, height: 1.2)),
+          Text(l.buildingInsulation, style: AppType.body(13, p.text, weight: FontWeight.w600, height: 1.2)),
           const SizedBox(height: 10),
           LayoutBuilder(
             builder: (context, c) {
@@ -445,7 +432,7 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
           Row(
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
-              Text('House size', style: AppType.body(13, p.text, weight: FontWeight.w600, height: 1.2)),
+              Text(l.houseSize, style: AppType.body(13, p.text, weight: FontWeight.w600, height: 1.2)),
               const Spacer(),
               Text('${_houseSize.toInt()}', style: AppType.display(26, AppColors.emerald, height: 1)),
               const SizedBox(width: 4),
@@ -489,7 +476,7 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
           ),
           const SizedBox(height: 30),
           PrimaryButton(
-            label: _isLoading ? _loadingMessage : 'Calculate my savings',
+            label: _isLoading ? _loadingMessage(l) : l.calculateSavings,
             icon: Icons.arrow_forward_rounded,
             loading: _isLoading,
             expand: true,
@@ -502,27 +489,29 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
   }
 
   String _houseSizeLabel() {
-    if (_houseSize < 80) return 'Small apartment';
-    if (_houseSize < 120) return 'Medium apartment';
-    if (_houseSize < 160) return 'Semi-detached';
-    if (_houseSize < 220) return 'Detached house';
-    return 'Large property';
+    final l = context.l10n;
+    if (_houseSize < 80) return l.sizeSmallApartment;
+    if (_houseSize < 120) return l.sizeMediumApartment;
+    if (_houseSize < 160) return l.sizeSemiDetached;
+    if (_houseSize < 220) return l.sizeDetached;
+    return l.sizeLarge;
   }
 
   // ---------------------------------------------------------------- assumptions
   Widget _buildAssumptionsCard(AppPalette p) {
+    final l = context.l10n;
     final rows = [
-      ('Gas price', '€0.10 / kWh', 'Current German residential tariff'),
-      ('Gas boiler efficiency', '85%', 'Typical old condensing boiler'),
-      ('Standard electricity', '€0.30 / kWh', 'Average German household rate'),
-      ('Smart rate (EnergyTwin)', '€0.18 / kWh', 'Off-peak EPEX SPOT average'),
-      ('Installation cost', '€15,000', 'Net after BAFA subsidy (up to €18,750)'),
-      ('Grid CO₂ intensity', '0.35 kg / kWh', 'German electricity mix, 2024'),
-      ('Gas CO₂ intensity', '0.20 kg / kWh', 'Direct natural gas emissions'),
+      (l.asmGasPrice, l.asmGasPriceValue, l.asmGasPriceHint),
+      (l.asmBoiler, l.asmBoilerValue, l.asmBoilerHint),
+      (l.asmStdElec, l.asmStdElecValue, l.asmStdElecHint),
+      (l.asmSmartRate, l.asmSmartRateValue, l.asmSmartRateHint),
+      (l.asmInstall, l.asmInstallValue, l.asmInstallHint),
+      (l.asmGridCo2, l.asmGridCo2Value, l.asmGridCo2Hint),
+      (l.asmGasCo2, l.asmGasCo2Value, l.asmGasCo2Hint),
     ];
     return GlassCard(
-      title: 'Model assumptions',
-      subtitle: 'Transparent methodology — Germany 2024 data.',
+      title: l.assumptionsTitle,
+      subtitle: l.assumptionsSubtitle,
       icon: Icons.rule_rounded,
       colors: const [AppColors.sky, AppColors.indigo],
       child: Column(
@@ -561,9 +550,9 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
         children: [
           const IconTile(icon: Icons.error_outline_rounded, colors: [AppColors.rose], size: 40, soft: true),
           const SizedBox(width: 14),
-          Expanded(child: Text(_errorMessage, style: AppType.body(14, p.text, weight: FontWeight.w600, height: 1.4))),
+          Expanded(child: Text(_error!(context.l10n), style: AppType.body(14, p.text, weight: FontWeight.w600, height: 1.4))),
           const SizedBox(width: 12),
-          TextLink(label: 'Try again', color: AppColors.rose, icon: Icons.refresh_rounded, onTap: _calculateROI),
+          TextLink(label: context.l10n.tryAgain, color: AppColors.rose, icon: Icons.refresh_rounded, onTap: _calculateROI),
         ],
       ),
     );
@@ -587,8 +576,8 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
       children: [
         FadeSlideIn(
           child: SectionHeader(
-            eyebrow: 'YOUR DIGITAL TWIN RESULTS',
-            title: 'Here\'s what you\'d save.',
+            eyebrow: context.l10n.resultsEyebrow,
+            title: context.l10n.resultsTitle,
             wide: isWide,
             compact: true,
           ),
@@ -626,11 +615,13 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
   }
 
   Widget _buildSavingsHero(double savings, double roi, double lifetime, double co2, bool isWide) {
+    final l = context.l10n;
+    // (value, decimals, is euro amount, suffix, label)
     final stats = [
-      (savings, 0, '€', '', 'Saved per year'),
-      (roi, 1, '', ' yrs', 'Break-even payback'),
-      (lifetime, 0, '€', '', 'Total over 20 years'),
-      (co2, 0, '', ' kg', 'CO₂ eliminated / yr'),
+      (savings, 0, true, '', l.statSavedPerYear),
+      (roi, 1, false, l.yearsSuffix, l.statBreakEven),
+      (lifetime, 0, true, '', l.statTwentyYears),
+      (co2, 0, false, ' kg', l.statCo2PerYear),
     ];
     return ClipRRect(
       borderRadius: BorderRadius.circular(28),
@@ -654,7 +645,7 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
                     children: [
                       const Icon(Icons.check_circle_rounded, color: Colors.white, size: 20),
                       const SizedBox(width: 8),
-                      Text('Simulation complete', style: AppType.body(14, Colors.white, weight: FontWeight.w700, height: 1.2)),
+                      Text(l.simulationComplete, style: AppType.body(14, Colors.white, weight: FontWeight.w700, height: 1.2)),
                     ],
                   ),
                   const SizedBox(height: 24),
@@ -681,7 +672,7 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
                                     child: CountUp(
                                       value: stats[i].$1,
                                       decimals: stats[i].$2,
-                                      prefix: stats[i].$3,
+                                      currency: stats[i].$3,
                                       suffix: stats[i].$4,
                                       thousands: true,
                                       duration: const Duration(milliseconds: 1800),
@@ -708,19 +699,19 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
 
   Widget _buildCostComparison(AppPalette p, double gasCost, double standardCost, double smartCost) {
     return GlassCard(
-      title: 'Annual cost comparison',
-      subtitle: 'Same warmth — three very different heating strategies.',
+      title: context.l10n.costTitle,
+      subtitle: context.l10n.costSubtitle,
       icon: Icons.compare_arrows_rounded,
       colors: _accent,
       child: Column(
         children: [
-          _costBar(p, 'Gas Boiler', 'Your current system — gas burned at 85% efficiency', gasCost, gasCost,
+          _costBar(p, context.l10n.costGas, context.l10n.costGasDesc, gasCost, gasCost,
               const [AppColors.orange, AppColors.rose], false, 0),
           const SizedBox(height: 20),
-          _costBar(p, 'Standard Heat Pump', 'Off-the-shelf install, billed at flat €0.30/kWh tariff', standardCost, gasCost,
+          _costBar(p, context.l10n.costStdHp, context.l10n.costStdHpDesc, standardCost, gasCost,
               const [AppColors.sky, AppColors.blue], false, 1),
           const SizedBox(height: 20),
-          _costBar(p, 'EnergyTwin Smart Heat Pump', 'AI shifts load to off-peak windows — avg €0.18/kWh', smartCost, gasCost, _accent, true, 2),
+          _costBar(p, context.l10n.costSmartHp, context.l10n.costSmartHpDesc, smartCost, gasCost, _accent, true, 2),
         ],
       ),
     );
@@ -744,7 +735,7 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                           decoration: BoxDecoration(gradient: LinearGradient(colors: colors), borderRadius: BorderRadius.circular(6)),
-                          child: Text('BEST', style: AppType.mono(9.5, Colors.white, weight: FontWeight.w800, spacing: 0.8)),
+                          child: Text(context.l10n.best, style: AppType.mono(9.5, Colors.white, weight: FontWeight.w800, spacing: 0.8)),
                         ),
                         const SizedBox(width: 8),
                       ],
@@ -760,8 +751,8 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
             CountUp(
               value: cost,
               decimals: 0,
-              prefix: '€',
-              suffix: '/yr',
+              currency: true,
+              suffix: context.l10n.perYearShort,
               thousands: true,
               style: AppType.display(18, colors.first),
             ),
@@ -774,10 +765,11 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
   }
 
   Widget _buildSystemSpecs(AppPalette p, double cop, double heatKwh, double elecKwh) {
-    final copLabel = cop >= 4.0 ? 'Excellent' : (cop >= 3.3 ? 'Good' : 'Acceptable');
+    final l = context.l10n;
+    final copLabel = cop >= 4.0 ? l.copExcellent : (cop >= 3.3 ? l.copGood : l.copAcceptable);
     final copColor = cop >= 4.0 ? AppColors.emerald : (cop >= 3.3 ? AppColors.amber : AppColors.sky);
     return GlassCard(
-      title: 'System specifications',
+      title: l.specsTitle,
       icon: Icons.settings_suggest_rounded,
       colors: const [AppColors.sky, AppColors.indigo],
       child: Column(
@@ -788,8 +780,8 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
               RingMeter(
                 value: cop / 5,
                 colors: [copColor, Color.lerp(copColor, AppColors.indigo, 0.4)!],
-                label: 'COP · $copLabel',
-                centerText: cop.toStringAsFixed(1),
+                label: l.copLabel(copLabel),
+                centerText: context.fmt(cop, 1),
                 size: 104,
               ),
               const SizedBox(width: 22),
@@ -797,9 +789,9 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    _bigFact(p, 'Annual heat demand', heatKwh, 'kWh'),
+                    _bigFact(p, l.annualHeatDemand, heatKwh, 'kWh'),
                     const SizedBox(height: 14),
-                    _bigFact(p, 'Heat pump electricity', elecKwh, 'kWh / yr'),
+                    _bigFact(p, l.hpElectricity, elecKwh, l.kwhPerYear),
                   ],
                 ),
               ),
@@ -808,13 +800,17 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
           const SizedBox(height: 20),
           Divider(color: p.border, height: 1),
           const SizedBox(height: 16),
-          _specRow(p, 'Annual heat demand', 'Total thermal energy your home needs for heating — derived from gas consumption × 85% boiler efficiency'),
-          _specRow(p, 'Heat pump electricity', 'Electricity the heat pump consumes to deliver the heat demand above'),
-          _specRow(p, 'Coefficient of performance', '1 kWh electricity → ${cop}x kWh of heat. Depends on insulation quality and system design.'),
+          _specRow(p, l.annualHeatDemand, l.annualHeatDemandHint),
+          _specRow(p, l.hpElectricity, l.hpElectricityHint),
+          _specRow(p, l.copFull, l.copFullHint(context.fmt(cop, 1))),
           _specRow(
             p,
-            'Insulation class · ${_insulationLevel[0].toUpperCase()}${_insulationLevel.substring(1)}',
-            'Determines achievable COP and heat distribution type (radiators vs. underfloor heating)',
+            l.insulationClass(switch (_insulationLevel) {
+              'poor' => l.insulationPoor,
+              'good' => l.insulationGood,
+              _ => l.insulationAverage,
+            }),
+            l.insulationClassHint,
           ),
         ],
       ),
@@ -871,27 +867,28 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
     final trees = (co2Saved / 21).toInt();
     final gasCo2 = (heatKwh / 0.85) * 0.20;
     final reductionPct = gasCo2 > 0 ? ((co2Saved / gasCo2) * 100).clamp(0, 100).toInt() : 0;
+    final l = context.l10n;
     return GlassCard(
-      title: 'Environmental impact',
+      title: l.envTitle,
       icon: Icons.eco_rounded,
       colors: _accent,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          _envRow(p, Icons.co2_rounded, AppColors.emerald, '${co2Saved.toStringAsFixed(0)} kg', 'CO₂ eliminated per year'),
-          _envRow(p, Icons.park_rounded, AppColors.teal, '~$trees trees', 'Equivalent annual CO₂ absorption'),
-          _envRow(p, Icons.directions_car_rounded, AppColors.sky, '${(co2Saved / 2300).toStringAsFixed(1)} cars', 'Taken off the road equivalent'),
+          _envRow(p, Icons.co2_rounded, AppColors.emerald, l.kgValue(context.fmt(co2Saved)), l.co2PerYear),
+          _envRow(p, Icons.park_rounded, AppColors.teal, l.treesApprox(context.fmt(trees)), l.treesHint),
+          _envRow(p, Icons.directions_car_rounded, AppColors.sky, l.carsValue(context.fmt(co2Saved / 2300, 1)), l.carsHint),
           const SizedBox(height: 10),
           Row(
             children: [
-              Expanded(child: Text('CO₂ reduction vs. your gas boiler', style: AppType.body(12.5, p.muted, weight: FontWeight.w600, height: 1.3))),
-              Text('$reductionPct%', style: AppType.display(18, AppColors.emerald)),
+              Expanded(child: Text(l.co2ReductionVsGas, style: AppType.body(12.5, p.muted, weight: FontWeight.w600, height: 1.3))),
+              Text('${context.fmt(reductionPct)} %', style: AppType.display(18, AppColors.emerald)),
             ],
           ),
           const SizedBox(height: 10),
           AnimatedBar(fraction: reductionPct / 100, colors: const [AppColors.teal, AppColors.emerald], height: 14),
           const SizedBox(height: 8),
-          Text('$reductionPct% less CO₂ than gas', style: AppType.body(12, AppColors.emerald, weight: FontWeight.w700, height: 1.3)),
+          Text(l.co2LessThanGas(context.fmt(reductionPct)), style: AppType.body(12, AppColors.emerald, weight: FontWeight.w700, height: 1.3)),
         ],
       ),
     );
@@ -921,40 +918,22 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
   Widget _buildSmartSchedulingCard(AppPalette p, double standardCost, double smartCost, bool isWide) {
     final extra = (standardCost - smartCost).abs();
     final pct = standardCost > 0 ? ((extra / standardCost) * 100).toInt() : 0;
-    const windows = [
-      (
-        Icons.nightlight_round,
-        AppColors.indigo,
-        '00:00 – 06:00',
-        'Overnight wind valley',
-        'Wind turbines run all night but demand is minimal. EPEX prices fall to 5–15 ct/kWh. EnergyTwin pre-charges your home\'s thermal mass silently while you sleep.',
-      ),
-      (
-        Icons.wb_sunny_rounded,
-        AppColors.amber,
-        '11:00 – 14:00',
-        'Solar surplus midday',
-        'Germany\'s solar fleet peaks and prices can hit 0 or even go negative. EnergyTwin maximises heat pump runtime in this window — essentially free heat.',
-      ),
-      (
-        Icons.trending_down_rounded,
-        AppColors.rose,
-        '17:00 – 20:00',
-        'Avoid evening peak',
-        'Evening demand spikes push EPEX to 30–60 ct/kWh. EnergyTwin pauses the heat pump. Stored heat keeps your home comfortable without paying peak rates.',
-      ),
+    final l = context.l10n;
+    final windows = [
+      (Icons.nightlight_round, AppColors.indigo, '00:00 – 06:00', l.windowNightTitle, l.windowNightBody),
+      (Icons.wb_sunny_rounded, AppColors.amber, '11:00 – 14:00', l.windowMiddayTitle, l.windowMiddayBody),
+      (Icons.trending_down_rounded, AppColors.rose, '17:00 – 20:00', l.windowEveningTitle, l.windowEveningBody),
     ];
 
     return GlassCard(
-      title: 'How EnergyTwin saves an extra €${extra.toStringAsFixed(0)}/yr ($pct%)',
-      subtitle:
-          'The AI shifts your heat pump runtime to the three cheapest daily windows on the German EPEX SPOT market — the same prices shown on your Prices screen.',
+      title: l.schedulingTitle(context.eur(extra), context.fmt(pct)),
+      subtitle: l.schedulingSubtitle,
       icon: Icons.bolt_rounded,
       colors: const [AppColors.amber, AppColors.orange],
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Text('A TYPICAL DAY', style: AppType.eyebrow(p.faint)),
+          Text(l.typicalDay, style: AppType.eyebrow(p.faint)),
           const SizedBox(height: 10),
           const _DayTimeline(),
           const SizedBox(height: 24),
@@ -1010,7 +989,7 @@ class _AdvisorScreenState extends State<AdvisorScreen> {
                 const SizedBox(width: 10),
                 Expanded(
                   child: Text(
-                    'A well-insulated home retains heat for 3–6 hours, making schedule shifting painless and invisible to occupants.',
+                    l.schedulingTip,
                     style: AppType.body(13, p.text, height: 1.45),
                   ),
                 ),
