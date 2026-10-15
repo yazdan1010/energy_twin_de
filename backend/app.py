@@ -14,6 +14,7 @@ import pandas as pd
 import math
 from datetime import datetime, timedelta
 import base64
+import tempfile
 import cv2
 import numpy as np
 from solar_part_files.data_fetcher import get_coordinates_from_address, fetch_satellite_image, fetch_historical_weather
@@ -334,7 +335,7 @@ def simulate_solar():
         energy_rating = data.get('energy_rating', 'D').upper()
         grid_price = float(data.get('grid_price_ct_kwh', 35.0))
         monthly_bill = float(data.get('monthly_bill_eur', 120.0))
-        household_size = int(data.get('number_of_residents', 3))
+        household_size = int(data.get('household_size', data.get('number_of_residents', 3)))
         
         lat = data.get('lat')
         lon = data.get('lon')
@@ -348,23 +349,43 @@ def simulate_solar():
                 # PRESENTATION FAILSAFE: If address is gibberish, default to Munich coordinates
                 lat, lon = 48.1351, 11.5820 
 
-        # --- THE PRESENTATION FIX ---
-        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        img_path = os.path.join(base_dir, "solar_part_files", "assets", "roof_top.png")
-        
-        raw_points = data.get('roof_points', [])
-        if not raw_points:
-            # PRESENTATION FAILSAFE: Simulate a PERFECT manual map selection from the old app
-            raw_points = [{'x': 100, 'y': 100}, {'x': 300, 'y': 100}, {'x': 300, 'y': 300}, {'x': 100, 'y': 300}]
-            
-        roof_contour = np.array([[int(p['x'] * 2), int(p['y'] * 2)] for p in raw_points], dtype=np.int32)
-        
-        num_panels, final_img = place_panels_on_roof(img_path, roof_contour)
-        
-        # ABSOLUTE SAFETY NET: If the panel algorithm still returns 0, force a realistic success state
+        # Current clients send back the exact satellite image the user traced on, plus
+        # the outline in that image's pixel coordinates. Older clients rely on the shared
+        # file written by /get_roof and send canvas points that are doubled here.
+        img_b64 = data.get('image_base64')
+        px_points = data.get('roof_points_px')
+        tmp_path = None
+        if img_b64:
+            fd, tmp_path = tempfile.mkstemp(suffix='.png')
+            with os.fdopen(fd, 'wb') as f:
+                f.write(base64.b64decode(img_b64))
+            img_path = tmp_path
+        else:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            img_path = os.path.join(base_dir, "solar_part_files", "assets", "roof_top.png")
+
+        if px_points and len(px_points) >= 3:
+            roof_contour = np.array([[int(round(p['x'])), int(round(p['y']))] for p in px_points], dtype=np.int32)
+        else:
+            raw_points = data.get('roof_points', [])
+            if not raw_points:
+                # PRESENTATION FAILSAFE: Simulate a PERFECT manual map selection from the old app
+                raw_points = [{'x': 100, 'y': 100}, {'x': 300, 'y': 100}, {'x': 300, 'y': 300}, {'x': 100, 'y': 300}]
+            roof_contour = np.array([[int(p['x'] * 2), int(p['y'] * 2)] for p in raw_points], dtype=np.int32)
+
+        try:
+            num_panels, final_img = place_panels_on_roof(img_path, roof_contour)
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.remove(tmp_path)
+
+        if num_panels == 0 and px_points:
+            return jsonify({"error": "No solar panels fit inside the traced outline. Trace the full roof surface and try again."}), 422
+
+        # ABSOLUTE SAFETY NET (legacy clients only): force a realistic success state
         if num_panels == 0:
             num_panels = 14
-            final_img = cv2.imread(img_path)
+            final_img = cv2.imread(img_path) if os.path.exists(img_path) else None
             if final_img is None:
                 final_img = np.zeros((800, 800, 3), dtype=np.uint8)
 

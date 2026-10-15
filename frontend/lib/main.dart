@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:frontend/advisor_screen.dart';
+import 'package:frontend/home_screen.dart';
 import 'package:frontend/price_dashboard_screen.dart';
 import 'package:frontend/solar_dashboard_screen.dart';
+import 'package:frontend/ui/glass_nav_bar.dart';
+import 'package:frontend/ui/kit.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 
@@ -44,7 +47,7 @@ class EnergyTwinApp extends StatelessWidget {
               onSurface: Color(0xFF0F172A),
             ),
             textTheme: GoogleFonts.interTextTheme(ThemeData.light().textTheme),
-            scaffoldBackgroundColor: const Color(0xFFF1F5F9),
+            scaffoldBackgroundColor: const AppPalette(false).bg,
           ),
 
           darkTheme: ThemeData(
@@ -59,7 +62,7 @@ class EnergyTwinApp extends StatelessWidget {
             textTheme: GoogleFonts.interTextTheme(
               ThemeData.dark().textTheme,
             ).apply(bodyColor: Colors.white, displayColor: Colors.white),
-            scaffoldBackgroundColor: const Color(0xFF0F172A),
+            scaffoldBackgroundColor: const AppPalette(true).bg,
           ),
           home: AppShell(),
         );
@@ -79,37 +82,61 @@ class AppShell extends StatefulWidget {
 }
 
 class _AppShellState extends State<AppShell> {
-  int _currentIndex = 0; // Start on the Advisor screen for now
+  int _currentIndex = 0;
 
-  final List<Widget> _screens = [
-    PriceDashboardScreen(themeNotifier: themeNotifier), // Screen 0
+  late final List<Widget> _screens = [
+    HomeScreen(themeNotifier: themeNotifier, onNavigate: _goTo),
+    PriceDashboardScreen(themeNotifier: themeNotifier),
     AdvisorScreen(themeNotifier: themeNotifier),
-    SolarDashboardScreen(themeNotifier: themeNotifier), // Screen 1
+    SolarDashboardScreen(themeNotifier: themeNotifier),
   ];
+
+  void _goTo(int index) => setState(() => _currentIndex = index);
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _screens[_currentIndex],
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _currentIndex,
-        onDestinationSelected: (int index) {
-          setState(() {
-            _currentIndex = index;
-          });
-        },
-        destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.bar_chart_outlined),
-            selectedIcon: Icon(Icons.bar_chart),
+      extendBody: true,
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 350),
+        switchInCurve: Curves.easeOutCubic,
+        transitionBuilder: (child, anim) => FadeTransition(
+          opacity: anim,
+          child: SlideTransition(
+            position: Tween(begin: const Offset(0, 0.02), end: Offset.zero).animate(anim),
+            child: child,
+          ),
+        ),
+        child: KeyedSubtree(key: ValueKey(_currentIndex), child: _screens[_currentIndex]),
+      ),
+      bottomNavigationBar: GlassNavBar(
+        index: _currentIndex,
+        onChanged: _goTo,
+        items: const [
+          GlassNavItem(
+            icon: Icons.home_outlined,
+            selectedIcon: Icons.home_rounded,
+            label: 'Home',
+            colors: [AppColors.emerald, AppColors.sky],
+          ),
+          GlassNavItem(
+            icon: Icons.insights_outlined,
+            selectedIcon: Icons.insights_rounded,
             label: 'Prices',
+            colors: [AppColors.sky, AppColors.indigo],
           ),
-          NavigationDestination(
-            icon: Icon(Icons.calculate_outlined),
-            selectedIcon: Icon(Icons.calculate),
+          GlassNavItem(
+            icon: Icons.heat_pump_outlined,
+            selectedIcon: Icons.heat_pump_rounded,
             label: 'Advisor',
+            colors: [AppColors.emerald, AppColors.teal],
           ),
-          NavigationDestination(icon: Icon(Icons.solar_power), label: 'Solar AI'),
+          GlassNavItem(
+            icon: Icons.solar_power_outlined,
+            selectedIcon: Icons.solar_power_rounded,
+            label: 'Solar AI',
+            colors: [AppColors.amber, AppColors.orange],
+          ),
         ],
       ),
     );
